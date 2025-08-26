@@ -1,26 +1,73 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* --- Tailwind v4 の色名/半径 → あなたのCSS変数 ---------------
+   これが無いと bg-card / text-foreground などが解決できず崩れます。
+---------------------------------------------------------------- */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+
+  /* shadcnやborderユーティリティが参照する標準のボーダー色 */
+  --color-border: var(--border);
+
+  /* 角丸トークン（shadcnの rounded-lg 等が参照） */
+  --radius-sm: calc(var(--radius-lg) - 4px);
+  --radius-md: calc(var(--radius-lg) - 2px);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: calc(var(--radius-lg) + 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* --- あなたの“ポップ”テーマ（唯一の真実） -------------------- */
+:root {
+  --background: #FFFBE6;
+  --foreground: #1A1A1A;
+
+  --primary: #FF5C8A;
+  --primary-foreground: #111111;
+
+  --accent: #00C2FF;
+  --card: #FFF2B3;
+
+  /* 標準のボーダー色（細線用）。太枠は --border-strong を直接参照 */
+  --border: #D5CFA9;
+  --border-strong: #1A1A1A;
+
+  --radius-lg: 16px;
+  --shadow-strong: 6px 6px 0 var(--border-strong);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* --- ベース適用 ------------------------------------------------ */
+@layer base {
+  * { @apply border-border; }                /* `border` ユーティリティの色を統一 */
+  body { @apply bg-background text-foreground antialiased; }
+}
+
+/* --- 背景パターン（任意） ------------------------------------- */
+.grid-bg{
+  background-image:
+    linear-gradient(to right, rgba(26,26,26,.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(26,26,26,.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.dot-bg{
+  background:
+    radial-gradient(circle at 1px 1px, rgba(26,26,26,.12) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+@layer utilities {
+  .page      { @apply mx-auto max-w-screen-lg px-4 sm:px-6 lg:px-8 py-6; }
+  .card-grid { @apply grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3; }
+  .actions   { @apply flex flex-col sm:flex-row gap-3; }
+  .h1-fluid  { font-size: clamp(1.75rem, 5vw, 2.5rem); font-weight: 800; letter-spacing: -0.01em; }
 }
