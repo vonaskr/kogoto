@@ -34,7 +34,7 @@ type ButtonBaseProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
 function Button({ className, variant, size, block, asChild, ...props }: ButtonBaseProps) {
   // asChild が true なら <Slot> を返す（中の子をそのまま採用）
   const Comp: any = asChild ? Slot : "button";
-  return <Comp className={cn(buttonVariants({ variant, size, block}),"whitespace-normal break-words text-center",className)} {...props} />;
+  return <Comp className={cn(buttonVariants({ variant, size, block}),"whitespace-normal break-all text-center leading-tight",className)} {...props} />;
 }
 
 export { Button, buttonVariants };

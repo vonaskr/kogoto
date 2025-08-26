@@ -6,6 +6,8 @@ import { CardGrid } from "@/components/layout/card-grid";
 import { ActionsRow } from "@/components/layout/actions-row";
 import { H1 } from "@/components/ui/responsive-heading";
 
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -66,7 +68,7 @@ export default function PalettePage() {
   const active = PALETTES.find((p) => p.id === activeId)!;
 
   return (
-    <Container>
+    <Container className="max-w-7xl lg:px-16">
       {/* 配色切替ボタン群（レイアウトのみ調整） */}
       <div className="flex flex-wrap gap-2 mb-4">
         {PALETTES.map((p) => (
@@ -99,7 +101,7 @@ export default function PalettePage() {
             </header>
 
             {/* カード群：1→2→3列 */}
-            <CardGrid>
+            <CardGrid  className="max-w-none">
               {/* 学習履歴 */}
               <BrutCard title="学習履歴">
                 <div className="space-y-2">
@@ -137,8 +139,8 @@ export default function PalettePage() {
 
                   <TabsContent value="rhythm" className="mt-4">
                     <ActionsRow>
-                      <Button className="sm:flex-1" block>リズムを始める</Button>
-                      <Button variant="surface" className="sm:flex-1" block>練習</Button>
+                       <Button block>リズムを始める</Button>
+                       <Button variant="surface" block>練習</Button>
                     </ActionsRow>
                   </TabsContent>
 
@@ -172,6 +174,22 @@ export default function PalettePage() {
               <span className="font-semibold">ポイント：1,240</span>
               <Button variant="accent">カニにご飯をあげる</Button>
             </div>
+
+            <div className="mt-8">
+            <div className="font-semibold mb-2">Popover demo</div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="surface">豆知識を開く</Button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <div className="space-y-2">
+                  <div className="font-bold">古語メモ</div>
+                  <p className="text-sm opacity-80">「わりなし」＝ひどい・道理に合わない など。</p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           </div>
         </section>
       </TooltipProvider>

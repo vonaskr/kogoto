@@ -24,5 +24,6 @@ export default function Home() {
         </CardContent>
       </Card>
     </Container>
+    
   );
 }
