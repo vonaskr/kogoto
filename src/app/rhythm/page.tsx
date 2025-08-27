@@ -11,7 +11,7 @@ export default function RhythmHub() {
           <h1 className="h1-fluid mb-4">リズム学習（ハブ）</h1>
           <p className="mb-6 opacity-80">ここから出題に進みます（ダミー）。</p>
           <Button asChild>
-            <Link href="/rhythm/result">出題→リザルトへ（仮）</Link>
+             <Link href="/rhythm/play">スタート</Link>
           </Button>
         </CardContent>
       </Card>
