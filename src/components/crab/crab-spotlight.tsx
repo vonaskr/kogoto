@@ -113,6 +113,7 @@ export function CrabSpotlight() {
   const [mode, setMode] = useState<"talk" | "feed">("talk");
   const [loadMode, setLoadMode] = useState<LoadMode>("machine");
   const [buf, setBuf] = useState<ArrayBuffer | null>(null);
+  const [ready, setReady] = useState(false);
   const [err, setErr] = useState<Error | null>(null);
   const riveBoxClass = useMemo(
 
@@ -191,15 +192,11 @@ export function CrabSpotlight() {
               mode={loadMode}
               buffer={buf}
               onReady={() => {
-                // machine でロードできたらフォールバックを止める
-                if (loadMode === "machine") {
-                  // no-op
-                }
+                setReady(true);
                 console.log("[Rive] loaded:", loadMode);
               }}
               onError={(e) => {
                 console.error("[Rive] onLoadError:", e);
-                // machine 失敗時は即 anim に切替
                 if (loadMode === "machine") setLoadMode("anim");
               }}
             />
@@ -211,6 +208,11 @@ export function CrabSpotlight() {
           {mode === "talk"
             ? "（ここに小言の吹き出しが入ります）"
             : "（ここに餌カード／ポイント表示が入ります）"}
+        </div>
+
+        {/* debug: 状態バッジ */}
+        <div className="mt-2 text-xs opacity-60 text-center">
+          <code>buf:{buf ? "✅" : "⏳"} / ready:{ready ? "✅" : "⏳"} / mode:{loadMode}</code>
         </div>
       </CardContent>
     </Card>
