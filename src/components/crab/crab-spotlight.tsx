@@ -4,14 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  useRive,
-  useStateMachineInput,
-  Layout as RiveLayout,
-  Fit,
-  Alignment,
-} from "@rive-app/react-webgl2";
+   useRive,
+   useStateMachineInput,
+   Layout,
+   Fit,
+   Alignment,
+ } from "@rive-app/react-canvas";
 
-
+ const ARTBOARD = "Crab";
+ const STATE_MACHINE = "CrabMachine";
+ const TRG_CORRECT = "onCorrect";
+ const TRG_WRONG   = "onWrong";
+ const BOOL_WALK   = "isWalking";
+ const NUM_TIER    = "comboTier";
 
 type LoadMode = "machine" | "anim";
 
@@ -24,43 +29,29 @@ function RivePlayer({
   onReady?: () => void;
   onError?: (e: unknown) => void;
 }) {
-  const params =
-    mode === "machine"
-      ? {
-          src: "/crab.riv",
-          stateMachines: "CrabMachine",
-          autoplay: true,
-          layout: new RiveLayout({ fit: Fit.Contain, alignment: Alignment.Center }),
-          onLoad: () => onReady?.(),
-          onLoadError: (e: unknown) => onError?.(e),
-        }
-      : {
-          src: "/crab.riv",
-          // artboard は自動選択に任せる（名前ズレ対策）
-          animations: ["idle", "walk_inplace"],
-          autoplay: true,
-          layout: new RiveLayout({ fit: Fit.Contain, alignment: Alignment.Center }),
-          onLoad: () => onReady?.(),
-          onLoadError: (e: unknown) => onError?.(e),
-        };
+    const params = {
+    src: "crab.riv",
+    artboard: ARTBOARD,
+    stateMachines: STATE_MACHINE,
+    autoplay: true,
+    layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
+    onLoad: () => onReady?.(),
+    onLoadError: (e: unknown) => onError?.(e),
+  } as const;
 
   const { rive, RiveComponent } = useRive(params as any);
-
+  //const { RiveComponent } = useRive({ src: "/crab.riv", autoplay: true })
 
   // rive インスタンスが来たら ready 扱い（onLoad が来ない環境の保険）
   useEffect(() => {
     if (rive) onReady?.();
   }, [rive]); // eslint-disable-line
 
- 
-
-
   // Machineモード時だけinputsを拾う
-  const onCorrect = useStateMachineInput(rive, "CrabMachine", "onCorrect");
-
-  const onWrong = useStateMachineInput(rive, "CrabMachine", "onWrong");
-  const isWalking = useStateMachineInput(rive, "CrabMachine", "isWalking");
-  const comboTier = useStateMachineInput(rive, "CrabMachine", "comboTier");
+    const onCorrect = useStateMachineInput(rive, STATE_MACHINE, TRG_CORRECT);
+    const onWrong   = useStateMachineInput(rive, STATE_MACHINE, TRG_WRONG);
+    const isWalking = useStateMachineInput(rive, STATE_MACHINE, BOOL_WALK);
+    const comboTier = useStateMachineInput(rive, STATE_MACHINE, NUM_TIER);
 
     // 親から呼べる正解トリガを window に公開（簡易ブリッジ）
   useEffect(() => {
@@ -74,7 +65,7 @@ function RivePlayer({
     };
   }, [onCorrect]);
 
-  
+
   useEffect(() => {
     if (!rive) return;
     if (isWalking && typeof isWalking.value === "boolean") isWalking.value = false;
@@ -135,7 +126,6 @@ function RivePlayer({
 
 export function CrabSpotlight() {
     const [mode, setMode] = useState<"talk" | "feed">("talk");
-    const [loadMode, setLoadMode] = useState<LoadMode>("machine");
     const [ready, setReady] = useState(false);
     const [points, setPoints] = useState(120);
     const [affinity, setAffinity] = useState(0.35); // 0..1
@@ -154,15 +144,7 @@ export function CrabSpotlight() {
     []
   );
 
- 
-  // 1.5秒で machine → anim にフォールバック
-  useEffect(() => {
-    if (loadMode !== "machine") return;
-    const t = setTimeout(() => setLoadMode("anim"), 1500);
-    return () => clearTimeout(t);
-  }, [loadMode]);
-
-    const handleFeed = (cost: number, exp: number) => {
+     const handleFeed = (cost: number, exp: number) => {
       if (points < cost) return; // 足りないときは無視（後でシェイクなど追加）
       setPoints((p) => p - cost);
       setAffinity((a) => Math.min(1, a + exp));
@@ -198,18 +180,16 @@ export function CrabSpotlight() {
         </div>
 
         {/* Rive Canvas */}
-        <div className={riveBoxClass}>
-          
+        <div className={riveBoxClass}>     
           <RivePlayer
-            mode={loadMode}
+            mode="machine"
             onReady={() => {
               setReady(true);
-              console.log("[Rive] loaded:", loadMode);
+              console.log("[Rive] loaded: machine");
             }}
             onError={(e) => {
               console.error("[Rive] onLoadError:", e);
-              if (loadMode === "machine") setLoadMode("anim");
-            }}
+                          }}
           />
 
         </div>
@@ -250,7 +230,7 @@ export function CrabSpotlight() {
         {/* debug: 状態バッジ */}
         <div className="mt-2 text-xs opacity-60 text-center">
               <code>
-              loaded:{ready ? "✅" : "⏳"} / mode:{loadMode} （Riveは後で差し替えOK）
+              loaded:{ready ? "✅" : "⏳"} / mode:machine
             </code>
 
 
