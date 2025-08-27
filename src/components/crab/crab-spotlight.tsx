@@ -11,6 +11,7 @@ import {
   Alignment,
 } from "@rive-app/react-canvas";
 
+
 type LoadMode = "machine" | "anim";
 
 function RivePlayer({
@@ -37,18 +38,25 @@ function RivePlayer({
         }
       : {
           buffer,
-          artboard: "Crab",
-          animations: "idle",
+          // artboard は自動選択に任せる（名前ズレ対策）
+          animations: ["idle", "walk_inplace"], // どちらか存在すれば再生
           autoplay: true,
           layout: new RiveLayout({ fit: Fit.Contain, alignment: Alignment.Center }),
           onLoad: () => onReady?.(),
           onLoadError: (e: unknown) => onError?.(e),
         };
 
-  const { rive, RiveComponent } = useRive(params as any);
+
+    const { rive, RiveComponent } = useRive(params as any);
+
+  // rive インスタンスが来たら ready 扱い（onLoad が来ない環境の保険）
+  useEffect(() => {
+    if (rive) onReady?.();
+  }, [rive]); // eslint-disable-line
 
   // Machineモード時だけinputsを拾う
   const onCorrect = useStateMachineInput(rive, "CrabMachine", "onCorrect");
+
   const onWrong = useStateMachineInput(rive, "CrabMachine", "onWrong");
   const isWalking = useStateMachineInput(rive, "CrabMachine", "isWalking");
   const comboTier = useStateMachineInput(rive, "CrabMachine", "comboTier");
@@ -120,6 +128,24 @@ export function CrabSpotlight() {
     () => "w-full h-[220px] sm:h-[260px] md:h-[320px] lg:h-[360px]",
     []
   );
+
+  // Rive WASM の取得先を明示（public/rive.wasm）
+  useEffect(() => {
+    (async () => {
+      try {
+        const mod: any = await import("@rive-app/canvas");
+        const fn = mod?.setWasmUrl ?? mod?.default?.setWasmUrl;
+        if (typeof fn === "function") {
+          fn("/rive.wasm");
+          // console.log("[Rive] setWasmUrl configured");
+        } else {
+          console.warn("[Rive] setWasmUrl not found on @rive-app/canvas (continuing)");
+        }
+      } catch (e) {
+        console.error("[Rive] setWasmUrl import failed:", e);
+      }
+    })();
+  }, []);
 
   // .riv を ArrayBuffer として取得
   useEffect(() => {
@@ -212,7 +238,10 @@ export function CrabSpotlight() {
 
         {/* debug: 状態バッジ */}
         <div className="mt-2 text-xs opacity-60 text-center">
-          <code>buf:{buf ? "✅" : "⏳"} / ready:{ready ? "✅" : "⏳"} / mode:{loadMode}</code>
+            <code>
+              buf:{buf ? `✅(${buf.byteLength}B)` : "⏳"} / ready:{ready ? "✅" : "⏳"} / mode:{loadMode}
+            </code>
+
         </div>
       </CardContent>
     </Card>
