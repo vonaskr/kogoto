@@ -1,7 +1,7 @@
 // src/components/crab/crab-spotlight.tsx
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +16,21 @@ import {
 const ARTBOARD = "Crab";
 const STATE_MACHINE = "CrabMachine";
 const TRIGGER = "onCorrect";
+const TRIGGER_WRONG = "onWrong";
 
 export function CrabSpotlight() {
+  const [mode, setMode] = useState<"talk" | "feed">("talk");
+  const [points, setPoints] = useState(120);
+  const [affinity, setAffinity] = useState(0.35); // 0..1
+  const feedItems = useMemo(
+    () => [
+      { id: "a", name: "えび",   emoji: "🦐", cost: 10, exp: 0.06 },
+      { id: "b", name: "ホタテ", emoji: "🦪", cost: 18, exp: 0.10 },
+      { id: "c", name: "カニかま", emoji: "🦀", cost: 6, exp: 0.035 },
+    ],
+    []
+  );  
+  
   // /app/test と同条件：react-canvas + artboard + stateMachines + layout
   const { rive, RiveComponent } = useRive({
     src: "/crab.riv", // ← ここは絶対パス。http://localhost:3000/crab.riv で200確認済
@@ -29,6 +42,19 @@ export function CrabSpotlight() {
 
   // Trigger（ロード前は undefined になり得る）
   const onCorrect = useStateMachineInput(rive, STATE_MACHINE, TRIGGER);
+  const onWrong   = useStateMachineInput(rive, STATE_MACHINE, TRIGGER_WRONG);
+
+  //helper
+  const fireCorrect = () => onCorrect?.fire?.();
+  const fireWrong   = () => onWrong?.fire?.();
+
+  // kani gohan
+  const handleFeed = (cost: number, exp: number) => {
+    if (points < cost) return; // 足りない時は無視（後でシェイクなど）
+    setPoints(p => p - cost);
+    setAffinity(a => Math.min(1, a + exp));
+    fireCorrect(); // 食べたら小喜び
+  };
 
   // デバッグ：Inputs が本当に見えているかを一度だけログ
   useEffect(() => {
@@ -53,17 +79,66 @@ export function CrabSpotlight() {
   return (
     <Card>
       <CardContent className="p-6 md:p-8">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="font-semibold">カニ★スポットライト（最小テスト）</p>
-          <Button size="sm" onClick={fire} disabled={!onCorrect}>
-            正解（Trigger発火）
-          </Button>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="font-semibold">カニ★スポットライト</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant={mode === "talk" ? "primary" : "surface"} onClick={() => setMode("talk")}>
+              小言
+            </Button>
+            <Button size="sm" variant={mode === "feed" ? "accent" : "surface"} onClick={() => setMode("feed")}>
+              ご飯
+            </Button>
+          </div>
         </div>
 
         {/* キャンバスは高さが無いと描画されません → 明示 */}
         <div className="w-full h-[300px]">
           <RiveComponent className="w-full h-full" />
         </div>
+
+                {/* デバッグ操作（必要に応じて残す/隠す） */}
+        <div className="mt-3 flex flex-wrap gap-2 items-center justify-center">
+          <Button size="sm" onClick={fireCorrect} disabled={!onCorrect}>正解トリガ</Button>
+          <Button size="sm" variant="surface" onClick={fireWrong} disabled={!onWrong}>誤答トリガ</Button>
+        </div>
+
+        {/* 下段：モード別ビュー（最小実装） */}
+        {mode === "talk" ? (
+          <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3">
+            <p className="text-sm opacity-90">カニ「今日もコツコツ〜」</p>
+            <div className="text-xs opacity-60">（タップで次の小言…は後で）</div>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-4">
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <span className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-3 py-1 bg-[var(--card)] text-sm">
+                Pt: <strong>{points}</strong>
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-3 py-1 bg-[var(--card)] text-sm">
+                友好度: <strong>{Math.round(affinity * 100)}%</strong>
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {feedItems.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => handleFeed(f.cost, f.exp)}
+                  className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] shadow-[var(--shadow-strong)] p-3 text-center hover:scale-[0.99] transition"
+                >
+                  <div className="text-2xl">{f.emoji}</div>
+                  <div className="text-sm font-semibold mt-1">{f.name}</div>
+                  <div className="text-xs opacity-70 mt-1">- {f.cost}pt / {Math.round(f.exp*100)}%</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ちょいデバッグ */}
+        <div className="mt-2 text-xs opacity-60 text-center">
+          <code>inputs:{String(Boolean(onCorrect))}/{String(Boolean(onWrong))}</code>
+        </div>
+        
       </CardContent>
     </Card>
   );
