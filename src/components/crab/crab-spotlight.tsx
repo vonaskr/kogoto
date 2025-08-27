@@ -92,7 +92,7 @@ export function CrabSpotlight() {
         </div>
 
         {/* キャンバスは高さが無いと描画されません → 明示 */}
-        <div className="w-full h-[300px]">
+        <div className="w-full mx-auto h-[60px] sm:h-[220px] md:h-[260px] lg:h-[300px] max-w-[170px]">
           <RiveComponent className="w-full h-full" />
         </div>
 
@@ -138,7 +138,7 @@ export function CrabSpotlight() {
         <div className="mt-2 text-xs opacity-60 text-center">
           <code>inputs:{String(Boolean(onCorrect))}/{String(Boolean(onWrong))}</code>
         </div>
-        
+
       </CardContent>
     </Card>
   );
