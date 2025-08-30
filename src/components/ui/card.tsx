@@ -10,6 +10,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
         "bg-[var(--card)] text-[var(--foreground)] flex flex-col gap-6",
         "rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)]",
         "shadow-[var(--shadow-strong)] py-6",
+        "pressable", // ← 乗せると少しだけ影が強く。押下で短く。
         className
       )}
       {...props}

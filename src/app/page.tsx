@@ -7,22 +7,19 @@ import { CrabSpotlight } from "@/components/crab/crab-spotlight";
 export default function Home() {
   return (
     <Container>
-      {/* SP: 学習→カニ→履歴 / PC: 左=履歴→学習, 右=カニ(sticky, 2行) */}
-      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1fr_420px]">
-        {/* 履歴（SPでは3番目、PCでは左上） */}
-        <section className="order-3 lg:order-none">
-          <HistoryPanel />
-        </section>
-
-        {/* カニ（SPでは2番目、PCでは右側・stickyで2行） */}
-        <aside className="order-2 lg:order-none lg:sticky lg:top-6 lg:self-start lg:row-span-2">
+      {/* SP: 1カラム → カニ / 履歴 / 学習 の順
+          PC: 2カラム → 左に履歴+学習、右にカニ(sticky) */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+        {/* カニ（SPでは先頭。PCでは右カラム＆追従） */}
+        <aside className="lg:col-start-2 lg:row-start-1 lg:sticky lg:top-6">
           <CrabSpotlight />
         </aside>
 
-        {/* 学習開始（SPでは1番目、PCでは左下） */}
-        <section className="order-1 lg:order-none">
+        {/* 左カラム（PC）/ 2番目以降（SP） */}
+        <div className="space-y-6">
+          <HistoryPanel />
           <ModeLaunchers />
-        </section>
+        </div>
       </div>
     </Container>
   );

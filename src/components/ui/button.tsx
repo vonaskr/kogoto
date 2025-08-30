@@ -8,15 +8,24 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center font-semibold transition-colors " +
-  "border-4 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 " +
+  "border-4 rounded-md focus-visible:outline-none " +
   "disabled:opacity-50 disabled:pointer-events-none",
+   
   {
     variants: {
       variant: {
-        primary: "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--border-strong)]",
-        surface: "bg-[var(--card)] text-[var(--foreground)] border-[var(--border-strong)]",
-        accent:  "bg-[var(--accent)] text-[var(--foreground)] border-[var(--border-strong)]",
-        ghost: "bg-transparent border-transparent text-[var(--foreground)]",
+        // pink button
+         primary:
+          "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--border-strong)] " +
+          "shadow-[var(--shadow-strong)] hover:shadow-[var(--shadow-strong)] active:shadow-[var(--shadow-press)]",
+        // normal button
+          surface:
+          "bg-[var(--card)] text-[var(--foreground)] border-[var(--border-strong)] " +
+          "shadow-[var(--shadow-strong)] hover:shadow-[var(--shadow-strong)] active:shadow-[var(--shadow-press)]",
+        // pink
+          accent:
+          "bg-[var(--accent)] text-[var(--foreground)] border-[var(--border-strong)] " +
+          "shadow-[var(--shadow-strong)] hover:shadow-[var(--shadow-strong)] active:shadow-[var(--shadow-press)]",
       },
       size: { sm: "h-8 px-3 text-sm", md: "h-10 px-4 text-base", lg: "h-12 px-6 text-lg" },
       block: { true: "w-full", false: "" },
@@ -34,7 +43,17 @@ type ButtonBaseProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
 function Button({ className, variant, size, block, asChild, ...props }: ButtonBaseProps) {
   // asChild が true なら <Slot> を返す（中の子をそのまま採用）
   const Comp: any = asChild ? Slot : "button";
-  return <Comp className={cn(buttonVariants({ variant, size, block}),"whitespace-normal break-all text-center leading-tight",className)} {...props} />;
+  return (
+    <Comp
+      className={cn(
+        buttonVariants({ variant, size, block }),
+        "whitespace-normal break-all text-center leading-tight",
+        "shadow-[var(--shadow-strong)] pressable", // ← 影＆押し込み
+        className
+      )}
+      {...props}
+    />
+  );
 }
 
 export { Button, buttonVariants };
