@@ -19,7 +19,8 @@ export type Vocab = {
   hint?: string | null;
 };
 
-const SEP_REGEX = /[,\uFF0C\u3001]/; // , ， 、
+// ,（カンマ）、，、（読点）に加え、|（パイプ）も区切りとして許容
+const SEP_REGEX = /[,\uFF0C\u3001|]/; // , ， 、 |
 
 // CSV一行をクォート対応で分解
 function parseCsvLine(line: string): string[] {
@@ -79,6 +80,7 @@ function normalizePart(raw: string): string {
 
   // タイプミス補正
   if (s === "varb") return "verb";
+  if (s === "adj-i") return "adj"; 
 
   // 日本語系
   const jpMap: Record<string, string> = {
@@ -108,6 +110,7 @@ function normalizePart(raw: string): string {
     n: "noun",
     adj: "adj",
     adjective: "adj",
+    "adj-i": "adj",  
     adv: "adv",
     adverb: "adv",
     "adj-na": "adj-na",

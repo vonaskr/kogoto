@@ -52,15 +52,18 @@ export default function RhythmPlay() {
         if (!vocab.length) throw new Error("辞書が空です");
         const weight = getWrongWeights(); // ★ 直近誤答の重み
         const quiz = buildQuizSet(vocab, QUIZ_COUNT, weight, { reviewOnly: reviewMode });
-        if (reviewMode) {
+        if (!quiz.length) {
+          if (reviewMode) {
             throw new Error("復習対象がありません（誤答履歴が空です）");
           } else {
             throw new Error("問題が生成できませんでした");
           }
-        setQs(quiz);
-        setIdx(0);
-        setPhase("ready");
-        setErr(null);
+        } else {
+          setQs(quiz);
+          setIdx(0);
+          setPhase("ready");
+          setErr(null);
+        }
       } catch (e: any) {
         setErr(e?.message ?? "読み込みに失敗しました");
       } finally {

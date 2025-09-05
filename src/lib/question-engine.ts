@@ -39,14 +39,24 @@ export function buildQuizSet(
       v.meanings.length > 0 &&
       String(v.meanings[0] ?? "").trim() !== ""
   );
-  if (!valid.length) return [];
+   if (!valid.length) {
+    if (typeof window !== "undefined") {
+      console.warn("[quiz] no valid vocab after sanitize");
+    }
+    return [];
+  }
 
   // --- 1) 候補プール作成（復習のみなら誤答IDから） ---
   let pool = valid.slice();
   if (opts?.reviewOnly) {
     const wrongIds = new Set([...weight.keys()]);
     pool = pool.filter((v) => wrongIds.has(v.id));
-    if (!pool.length) return []; // 復習対象なし（呼び出し側で文言表示）
+    if (!pool.length) {
+      if (typeof window !== "undefined") {
+        console.info("[quiz] reviewOnly requested but no wrongIds pool");
+      }
+      return []; // 復習対象なし（呼び出し側で文言表示）
+    }
   }
 
   // --- 2) 重みづけ（誤答回数に比例） ---
@@ -71,7 +81,7 @@ export function buildQuizSet(
 
   // --- 3) ユニーク選抜（不足時は pool 長に合わせる） ---
   const seen = new Set<number>();
-  const need = Math.min(count, weighted.length);
+  const need = Math.min(count, Math.max(1, weighted.length));
   const picked: Vocab[] = [];
   let guard = 0;
   while (picked.length < need && guard++ < weighted.length * 3) {
@@ -80,6 +90,10 @@ export function buildQuizSet(
     seen.add(v.id);
     picked.push(v);
   }
+  // どうしても picked が空なら、valid から先頭をフォールバック
+    if (!picked.length) {
+      picked.push(valid[0]);
+    }
 
   // --- 4) 4択生成（同品詞優先 → 全体フォールバックで必ず4択に） ---
   const byPos = new Map<string, Vocab[]>();
@@ -139,10 +153,23 @@ export function buildQuizSet(
     return { choices, answer };
   };
 
-  return picked.map((target) => {
+  const quiz = picked.map((target) => {
     const { choices, answer } = makeChoices(target);
     return { id: target.id, word: target.word, choices, answer };
   });
+
+  if (typeof window !== "undefined") {
+    console.info(
+      `[quiz] built: picked=${picked.length}, need=${need}, pool=${pool.length}, valid=${valid.length}`
+    );
+    // コンソールデバッグ：各問の choices を確認（必要なときだけ一時的に）
+    quiz.forEach((q, i) => {
+      if (q.choices.includes("（なし）")) {
+        console.warn(`[quiz] q${i+1} has fallback "（なし）":`, q.word, q.choices);
+      }
+    });
+  }
+  return quiz;
 }
 
 // --- Utils ---
