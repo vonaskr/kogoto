@@ -32,6 +32,7 @@ export default function Ambiguous() {
   const beatsInPhaseRef = useRef(0); // そのフェーズ内で経過した拍数
   const [judgeMark, setJudgeMark] = useState<"ok" | "ng" | null>(null); // ○ × オーバーレイ
   const lockRef = useRef(false); // 二重判定防止
+  const skipNextBeatSpeakRef = useRef(false); // 直後発話した回の1拍目は抑制
   const router = useRouter();
   // ==== セッション蓄積 ====
   type AmbItem = {
@@ -51,8 +52,11 @@ export default function Ambiguous() {
     beatsInPhaseRef.current += 1;
 
     if (phase === "prompt" && beat === 1 && current) {
-      // 1拍目でTTS提示
-      speak(current.word, { lang: "ja-JP", rate: 0.95 });
+      // 直後に既に喋っていればこの1拍目はスキップ
+      if (!skipNextBeatSpeakRef.current) {
+        speak(current.word, { lang: "ja-JP", rate: 0.95 });
+      }
+      skipNextBeatSpeakRef.current = false;
       // すぐ回答フェーズへ（以降 3拍受付）
       setPhase("answering");
       beatsInPhaseRef.current = 0;
@@ -73,7 +77,7 @@ export default function Ambiguous() {
         setJudgeMark(null);
         beatsInPhaseRef.current = 0;
         lockRef.current = false;
-                // 5問到達なら finalize → 結果へ、まだなら次問へ
+        // 5問到達なら finalize → 結果へ、まだなら次問へ
         if (itemsRef.current.length >= QUESTIONS_PER_SESSION) {
           const summary = finalizeSession();
           stopMetro();
@@ -114,6 +118,7 @@ export default function Ambiguous() {
         v.onloadedmetadata = () => res();
       });
       await videoRef.current.play();
+
     } catch (e: any) {
       console.error("Camera error:", e?.name, e?.message, e);
       setCamReady("error");
@@ -233,15 +238,15 @@ export default function Ambiguous() {
       earnedPoints: correct ? 1 : 0,
       wrongIds: correct ? [] : [current.id],
     });
-     // セッション項目を蓄積
-     const item: AmbItem = {
-     vocabId: current.id,
-     word: current.word,
-     correctText: current.nuance === "pos" ? "ポジティブ" : "ネガティブ",
-     chosenText: chosen === "pos" ? "ポジティブ" : "ネガティブ",
-     correct,
-     };
-   itemsRef.current.push(item);
+    // セッション項目を蓄積
+    const item: AmbItem = {
+      vocabId: current.id,
+      word: current.word,
+      correctText: current.nuance === "pos" ? "ポジティブ" : "ネガティブ",
+      chosenText: chosen === "pos" ? "ポジティブ" : "ネガティブ",
+      correct,
+    };
+    itemsRef.current.push(item);
   }
 
   function finalizeSession() {
@@ -262,10 +267,17 @@ export default function Ambiguous() {
     return { total: items.length, correct: correctN, streak: comboMax };
   }
 
+
+  // 即時発話：設問が見えた直後に読み上げ
+  useEffect(() => {
+    if (current) speak(current.word, { lang: "ja-JP", rate: 0.95 });
+  }, [idx]);
+
   // ==== 次の問題へ ====
   function next() {
     emaRef.current = { smile: 0.5, frown: 0.5, posRun: 0, negRun: 0 };
     setIdx((i) => (i + 1) % Math.max(1, pool.length));
+    skipNextBeatSpeakRef.current = true;
   }
 
   // ==== 選択肢ハイライト ====
@@ -283,8 +295,11 @@ export default function Ambiguous() {
   }
 
   async function startWithCamera() {
-    await startCamera();
+    // 先にクイズ画面へ → videoRef がマウントされてからカメラ起動
     setView("quiz");
+    requestAnimationFrame(async () => {
+      await startCamera(); // これでクイズ遷移直後に自動でプレビューが出る
+    });
     startQuiz();
   }
   function startWithoutCamera() {
@@ -317,155 +332,159 @@ export default function Ambiguous() {
           </CardContent>
         </Card>
       ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 出題カード */}
-        <Card pressable={false}>
-          <CardContent className="p-6 md:p-8 relative">
-             <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h1 className="h1-fluid">曖昧クイズ</h1>
-                <p className="text-sm opacity-70">
-                  {correctCount}/{totalCount} 正解　
-                  コンボ: {combo}（最高 {comboMax}）
-                </p>
-              </div>
-              <div className="flex gap-2">
-                 {!isRunning ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 出題カード */}
+          <Card pressable={false}>
+            <CardContent className="p-6 md:p-8">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h1 className="h1-fluid">曖昧クイズ</h1>
+                  <p className="text-sm opacity-70">
+                    {correctCount}/{totalCount} 正解
+                    コンボ: {combo}（最高 {comboMax}）
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {!isRunning ? (
                     <Button onClick={startQuiz}>開始</Button>
                   ) : (
-                       <Button
-                        variant="surface"
-                        onClick={() => {
-                          const summary = finalizeSession();   // ここまでの回答を保存
-                          stopMetro();
-                          if (summary && summary.total > 0) {
-                            const { total, correct, streak } = summary;
-                            router.push(`/rhythm/result?total=${total}&correct=${correct}&streak=${streak}`);
-                          } else {
-                            router.push("/"); // 1問も答えていないときはホーム
-                          }
-                          setPhase("idle");
-                        }}
-                      >
-                        やめる
-                      </Button>
+                    <Button
+                      variant="surface"
+                      onClick={() => {
+                        const summary = finalizeSession();   // ここまでの回答を保存
+                        stopMetro();
+                        if (summary && summary.total > 0) {
+                          const { total, correct, streak } = summary;
+                          router.push(`/rhythm/result?total=${total}&correct=${correct}&streak=${streak}`);
+                        } else {
+                          router.push("/"); // 1問も答えていないときはホーム
+                        }
+                        setPhase("idle");
+                      }}
+                    >
+                      やめる
+                    </Button>
                   )}
+                </div>
               </div>
-            </div>
 
-            {/* 単語 */}
-            <div className="mb-6 text-4xl md:text-5xl font-bold tracking-wide">
-              {current ? current.word : "読み込み中..."}
-            </div>
+              {/* 単語 */}
+              <div className="mb-6 text-4xl md:text-5xl font-bold tracking-wide">
+                {current ? current.word : "読み込み中..."}
+              </div>
 
-            {/* 選択肢（表情に応じて強調） */}
-            <div className="mb-4 flex gap-3">
-              <Button
-                variant={posActive ? "accent" : "surface"}
-                onClick={() => decide("pos")}
-                className="flex-1"
-              >
-                ポジティブ
-              </Button>
-              <Button
-                variant={negActive ? "accent" : "surface"}
-                onClick={() => decide("neg")}
-                className="flex-1"
-              >
-                ネガティブ
-              </Button>
-            </div>
+              {/* 選択肢（表情に応じて強調） */}
+              <div className="mb-4 flex gap-3">
+                <Button
+                  variant={posActive ? "accent" : "surface"}
+                  onClick={() => decide("pos")}
+                  className="flex-1"
+                >
+                  ポジティブ
+                </Button>
+                <Button
+                  variant={negActive ? "accent" : "surface"}
+                  onClick={() => decide("neg")}
+                  className="flex-1"
+                >
+                  ネガティブ
+                </Button>
+              </div>
 
 
-            {/* ビート目盛り（●●●） */}
-            <div className="mt-2 flex gap-2">
-              {[1,2,3].map((n) => {
-                const active = phase === "answering" && beatsInPhaseRef.current >= n;
-                return (
+              {/* ビート目盛り（●●●） */}
+              <div className="mt-2 flex gap-2">
+                {[1, 2, 3].map((n) => {
+                  const active = phase === "answering" && beatsInPhaseRef.current >= n;
+                  return (
+                    <div
+                      key={n}
+                      className="h-2 w-full rounded border-2"
+                      style={{
+                        borderColor: "var(--border-strong)",
+                        background: active
+                          ? "color-mix(in srgb, var(--primary) 60%, var(--background))"
+                          : "color-mix(in srgb, var(--border) 30%, var(--background))",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            {/* 判定スロット（常設の下段エリア） */}
+            <div className="mt-4 h-24 md:h-28 grid place-items-center">
+              {judgeMark && (
+                <div
+                  className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)]
+                             bg-[color-mix(in_srgb,var(--card)_85%,var(--background))]
+                             px-6 py-3 text-center shadow-[var(--shadow-strong)]"
+                >
                   <div
-                    key={n}
-                    className="h-2 w-full rounded border-2"
-                    style={{
-                      borderColor: "var(--border-strong)",
-                      background: active
-                        ? "color-mix(in srgb, var(--primary) 60%, var(--background))"
-                        : "color-mix(in srgb, var(--border) 30%, var(--background))",
-                    }}
-                  />
-                );
-              })}
-            </div>
-            {/* 判定オーバーレイ（○×＋意味） */}
-            {judgeMark && (
-              <div className="absolute inset-0 grid place-items-center pointer-events-none">
-                <div className="text-center">
-                  <div
-                    className="text-[min(18vw,160px)] font-extrabold animate-scaleIn leading-none"
+                    className="text-[min(18vw,110px)] font-extrabold animate-scaleIn leading-none"
                     style={{ color: judgeMark === "ok" ? "var(--primary)" : "var(--accent)" }}
                   >
                     {judgeMark === "ok" ? "○" : "×"}
                   </div>
                   {current && (
-                    <div className="mt-2 text-xl md:text-2xl font-semibold"
+                    <div className="mt-1 text-base md:text-xl font-semibold"
                          style={{ color: "var(--foreground)" }}>
                       {current.meanings?.[0] ?? ""}
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* カメラカード */}
-        <Card pressable={false}>
-          <CardContent className="p-6 md:p-8">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="font-semibold">カメラ</div>
-              <div className="text-sm opacity-70">
-                状態：{camReady === "idle" && "未開始"}
-                {camReady === "on" && "動作中"}
-                {camReady === "off" && "停止"}
-                {camReady === "error" && "エラー/拒否"}
-              </div>
-            </div>
-            <div className="mb-4">
-              <video
-                ref={videoRef}
-                className="w-full h-48 md:h-56 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] object-cover bg-[color-mix(in_srgb,var(--card)_70%,var(--background))]"
-                muted
-                playsInline
-                autoPlay
-              />
-            </div>
-            <div className="mb-6 flex gap-2">
-              {camReady !== "on" ? (
-                <Button onClick={startCamera}>カメラを使う</Button>
-              ) : (
-                <Button variant="surface" onClick={stopCamera}>カメラを止める</Button>
               )}
             </div>
+            </CardContent>
+          </Card>
 
-            {/* 表情ゲージ */}
-            <div className="space-y-3">
-              <div className="text-sm opacity-70">smile {Math.round(score.smile * 100)}%</div>
-              <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--primary)_15%,var(--background))]">
-                <div
-                  className="h-3 rounded bg-[var(--primary)]"
-                  style={{ width: `${Math.round(score.smile * 100)}%` }}
+          {/* カメラカード */}
+          <Card pressable={false}>
+            <CardContent className="p-6 md:p-8">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="font-semibold">カメラ</div>
+                <div className="text-sm opacity-70">
+                  状態：{camReady === "idle" && "未開始"}
+                  {camReady === "on" && "動作中"}
+                  {camReady === "off" && "停止"}
+                  {camReady === "error" && "エラー/拒否"}
+                </div>
+              </div>
+              <div className="mb-4">
+                <video
+                  ref={videoRef}
+                  className="w-full h-48 md:h-56 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] object-cover bg-[color-mix(in_srgb,var(--card)_70%,var(--background))]"
+                  muted
+                  playsInline
+                  autoPlay
                 />
               </div>
-              <div className="text-sm opacity-70">frown {Math.round(score.frown * 100)}%</div>
-              <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--accent)_15%,var(--background))]">
-                <div
-                  className="h-3 rounded bg-[var(--accent)]"
-                  style={{ width: `${Math.round(score.frown * 100)}%` }}
-                />
+              <div className="mb-6 flex gap-2">
+                {camReady !== "on" ? (
+                  <Button onClick={startCamera}>カメラを使う</Button>
+                ) : (
+                  <Button variant="surface" onClick={stopCamera}>カメラを止める</Button>
+                )}
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+
+              {/* 表情ゲージ */}
+              <div className="space-y-3">
+                <div className="text-sm opacity-70">smile {Math.round(score.smile * 100)}%</div>
+                <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--primary)_15%,var(--background))]">
+                  <div
+                    className="h-3 rounded bg-[var(--primary)]"
+                    style={{ width: `${Math.round(score.smile * 100)}%` }}
+                  />
+                </div>
+                <div className="text-sm opacity-70">frown {Math.round(score.frown * 100)}%</div>
+                <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--accent)_15%,var(--background))]">
+                  <div
+                    className="h-3 rounded bg-[var(--accent)]"
+                    style={{ width: `${Math.round(score.frown * 100)}%` }}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </Container>
   );
