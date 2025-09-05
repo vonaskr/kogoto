@@ -10,6 +10,7 @@ import { speak } from "@/lib/tts";
 import { sfx } from "@/lib/sfx";
 import { saveSession } from "@/lib/store";
 import { useMetronome } from "@/lib/use-metronome";
+import { useRouter } from "next/navigation";
 
 export default function Ambiguous() {
   // ==== カメラ / 表情 ====
@@ -31,6 +32,13 @@ export default function Ambiguous() {
   const beatsInPhaseRef = useRef(0); // そのフェーズ内で経過した拍数
   const [judgeMark, setJudgeMark] = useState<"ok" | "ng" | null>(null); // ○ × オーバーレイ
   const lockRef = useRef(false); // 二重判定防止
+  const router = useRouter();
+  // ==== セッション蓄積 ====
+  type AmbItem = {
+    vocabId: number; word: string; correctText: string; chosenText: string | null; correct: boolean;
+  };
+  const itemsRef = useRef<AmbItem[]>([]);
+  const QUESTIONS_PER_SESSION = 5;
 
   // ==== スコア ====
   const [correctCount, setCorrectCount] = useState(0);
@@ -60,13 +68,24 @@ export default function Ambiguous() {
         doJudge(chosen);
       }
     } else if (phase === "judge") {
-      // 判定表示は3拍（ご要望）。終わったら次の問題へ
+      // 判定表示は3拍 終わったら次の問題へ
       if (beatsInPhaseRef.current >= 3) {
         setJudgeMark(null);
         beatsInPhaseRef.current = 0;
         lockRef.current = false;
-        setPhase("prompt");
-        next();
+                // 5問到達なら finalize → 結果へ、まだなら次問へ
+        if (itemsRef.current.length >= QUESTIONS_PER_SESSION) {
+          const summary = finalizeSession();
+          stopMetro();
+          if (summary) {
+            const { total, correct, streak } = summary;
+            router.push(`/rhythm/result?total=${total}&correct=${correct}&streak=${streak}`);
+          }
+          setPhase("idle");
+        } else {
+          setPhase("prompt");
+          next();
+        }
       }
     }
   });
@@ -157,6 +176,7 @@ export default function Ambiguous() {
       setPool(filtered.sort(() => Math.random() - 0.5));
     })();
     return () => {
+      finalizeSession();
       stopCamera();
       disposeFace();
       stopMetro();
@@ -210,6 +230,33 @@ export default function Ambiguous() {
       earnedPoints: correct ? 1 : 0,
       wrongIds: correct ? [] : [current.id],
     });
+     // セッション項目を蓄積
+     const item: AmbItem = {
+     vocabId: current.id,
+     word: current.word,
+     correctText: current.nuance === "pos" ? "ポジティブ" : "ネガティブ",
+     chosenText: chosen === "pos" ? "ポジティブ" : "ネガティブ",
+     correct,
+     };
+   itemsRef.current.push(item);
+  }
+
+  function finalizeSession() {
+    const items = itemsRef.current;
+    if (!items.length) return null;
+    const correctN = items.filter((it: AmbItem) => it.correct).length;
+    const wrongIds = items.filter((it: AmbItem) => !it.correct).map((it) => it.vocabId);
+    saveSession({
+      id: `${Date.now()}`,
+      startedAt: Date.now(),
+      items,
+      correctRate: items.length ? correctN / items.length : 0,
+      comboMax,
+      earnedPoints: correctN, // ひとまず正解数=ポイント
+      wrongIds,
+    });
+    itemsRef.current = []; // クリア
+    return { total: items.length, correct: correctN, streak: comboMax };
   }
 
   // ==== 次の問題へ ====
@@ -253,13 +300,14 @@ export default function Ambiguous() {
                 {!isRunning ? (
                   <Button onClick={startQuiz}>開始</Button>
                 ) : (
-                  <Button
-                    variant="surface"
-                    onClick={() => {
-                      stopMetro();
-                      setPhase("idle");
-                    }}
-                  >
+                   <Button
+                      variant="surface"
+                      onClick={() => {
+                        finalizeSession();
+                        stopMetro();
+                        setPhase("idle");
+                      }}
+                    >
                     停止
                   </Button>
                 )}
