@@ -16,7 +16,11 @@ export function useMetronome(
   const [isRunning, setIsRunning] = useState(false);
   const schedIdRef = useRef<number | null>(null);
   const beatRef = useRef(0); // 0..3
-
+  const onBeatRef = useRef<typeof onBeat>();
+  useEffect(() => {
+    onBeatRef.current = onBeat;
+  }, [onBeat]);
+  
   const clear = useCallback(() => {
     Tone.Transport.cancel();
     if (schedIdRef.current != null) {
@@ -32,8 +36,8 @@ export function useMetronome(
     schedIdRef.current = Tone.Transport.scheduleRepeat((time: number) => {
       // 0→1,2,3,4…にして渡す
       beatRef.current = (beatRef.current + 1) % 4;
-      const oneBased = ((beatRef.current + 3) % 4) + 1; // 0→1, 1→2, 2→3, 3→4
-      onBeat?.(oneBased, time);
+      const oneBased = beatRef.current + 1; // 1..4
+      onBeatRef.current?.(oneBased, time);
     }, "4n"); // quarter note
   }, [bpm, onBeat, clear]);
 
@@ -48,6 +52,9 @@ export function useMetronome(
     Tone.Transport.stop();
     clear();
     setIsRunning(false);
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
   }, [clear]);
 
   // BPM変更API
