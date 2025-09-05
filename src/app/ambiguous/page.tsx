@@ -283,13 +283,13 @@ export default function Ambiguous() {
             </div>
             {/* 判定オーバーレイ（○×） */}
             {judgeMark && (
-              <div className="absolute inset-0 grid place-items-center pointer-events-none">
+              <div
+                className={`absolute inset-0 grid place-items-center pointer-events-none
+                  ${judgeMark === "ok" ? "bg-green-500/40" : "bg-red-500/40"}`}
+              >
                 <div
-                  className="text-[min(18vw,160px)] font-extrabold"
-                  style={{
-                    color: "var(--foreground)",
-                    textShadow: "0 0 0 var(--border-strong)",
-                  }}
+                  className="text-[min(18vw,160px)] font-extrabold animate-scaleIn"
+                  style={{ color: "var(--foreground)" }}
                 >
                   {judgeMark === "ok" ? "○" : "×"}
                 </div>

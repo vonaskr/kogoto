@@ -112,3 +112,14 @@
   .pressable:active   { transform: translateY(1px); box-shadow: var(--shadow-pressed); }
   .pressable:focus-visible { outline: none; box-shadow: var(--shadow-lift); }
 }
+
+/*正誤用画面フラッシュアニメーション*/
+@keyframes scaleIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.6s ease-out forwards;
+}
