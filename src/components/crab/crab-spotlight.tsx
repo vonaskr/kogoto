@@ -11,7 +11,7 @@ import {
   Fit,
   Alignment,
 } from "@rive-app/react-canvas";
-import { getPoints, getCrabState, feedCrab } from "@/lib/store";
+import { getPoints, getCrabState, feedCrab, getCrabLevelStep } from "@/lib/store";
 
 // Rive Editor と完全一致させる
 const ARTBOARD = "Crab";
@@ -24,7 +24,8 @@ export function CrabSpotlight() {
   const [points, setPoints] = useState(0);
   const [affinity, setAffinity] = useState(0); // 0..1
   const [level, setLevel] = useState(1);
-  const affPct = Math.round(affinity * 100); // 0..100
+  const step = getCrabLevelStep();
+  const affPct = Math.round((affinity * 10000) / step) / 100; 
   const feedItems = useMemo(
     () => [
       { id: "a", name: "えび",   emoji: "🦐", cost: 10, exp: 0.06 },
@@ -64,7 +65,7 @@ export function CrabSpotlight() {
   const handleFeed = (cost: number, exp: number) => {
     if (points < cost) return;
     // exp は 0..1 の割合で来る → ％ポイントへ
-    const ok = feedCrab(cost, Math.round(exp * 100));
+    const ok = feedCrab(cost, Math.round(exp * step));
     if (!ok) return;
     const p = getPoints();
     const crab = getCrabState();
