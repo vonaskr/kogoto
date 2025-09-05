@@ -19,6 +19,18 @@ export async function initFace() {
   const mp = await import("@mediapipe/tasks-vision");
   vision = mp;
   const wasmPath = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+ // Mediapipe が INFO を stderr に流すため Next の赤Nが点く → 既知文言のみ握りつぶし
+  const origErr = console.error;
+  console.error = (msg?: any, ...rest: any[]) => {
+    const text = String(msg ?? "");
+    if (
+      text.includes("Created TensorFlow Lite XNNPACK delegate for CPU.") ||
+      text.includes("Feedback manager requires a model with a single signature inference")
+    ) {
+      return console.debug("[mediapipe]", text, ...rest);
+    }
+    return origErr(msg, ...rest);
+  };
   const fileset = await mp.FilesetResolver.forVisionTasks(wasmPath);
   landmarker = await mp.FaceLandmarker.createFromOptions(fileset, {
     baseOptions: {
@@ -29,6 +41,7 @@ export async function initFace() {
     numFaces: 1,
     outputFacialTransformationMatrixes: true,
   });
+  console.error = origErr; 
 }
 
 export function startFaceStream(
@@ -49,11 +62,21 @@ export function startFaceStream(
     if (!lastTs || t - lastTs >= frameInterval) {
       lastTs = t;
 
-      // MediaPipeにvideoフレームを渡してランドマーク検出
-      const result = await landmarker.detectForVideo(
-        video,
-        performance.now() // DOMHighResTimeStamp を明示的に使用
-      );
+      // フレーム準備ガード（メタデータ未読み込み・サイズ0はスキップ）
+      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+        onScore({ smile: 0.5, frown: 0.5 });
+        return;
+      }
+      let result: any;
+      try {
+        // MediaPipeにvideoフレームを渡してランドマーク検出
+        result = await landmarker.detectForVideo(video, performance.now());
+      } catch (e: any) {
+        // 稀に内部例外が投げられるので握りつぶさずスキップ
+        console.warn("detectForVideo error:", e?.name, e?.message || e);
+        onScore({ smile: 0.5, frown: 0.5 });
+        return;
+      }
 
       // ランドマークが無ければ「中立」に近いスコアを返す（UI側でタイムアウト丸め）
       if (!result?.faceLandmarks?.length) {
