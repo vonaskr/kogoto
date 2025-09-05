@@ -297,20 +297,24 @@ export default function Ambiguous() {
                 </p>
               </div>
               <div className="flex gap-2">
-                {!isRunning ? (
-                  <Button onClick={startQuiz}>開始</Button>
-                ) : (
-                   <Button
+                 {!isRunning ? (
+                    <Button onClick={startQuiz}>開始</Button>
+                  ) : (
+                    <Button
                       variant="surface"
                       onClick={() => {
-                        finalizeSession();
+                        const summary = finalizeSession();   // ここまでの回答を保存
                         stopMetro();
+                        if (summary) {
+                          const { total, correct, streak } = summary;
+                          router.push(`/rhythm/result?total=${total}&correct=${correct}&streak=${streak}`);
+                        }
                         setPhase("idle");
                       }}
                     >
-                    停止
-                  </Button>
-                )}
+                      やめる
+                    </Button>
+                  )}
               </div>
             </div>
 
