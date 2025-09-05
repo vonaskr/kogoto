@@ -53,9 +53,46 @@ export function getLatestSession(): SessionResult | null {
   return arr.length ? arr[arr.length - 1] : null;
 }
 
+// 直近が×の語だけを復習対象として重み付け
+// （※ 過去の誤答はカウントするが、直近が○に戻った語は除外）
 export function getWrongWeights(): Map<number, number> {
-  const wrong = readJSON<number[]>(WRONG_KEY, []);
-  const m = new Map<number, number>();
-  for (const id of wrong) m.set(id, (m.get(id) ?? 0) + 1);
-  return m;
+  const sessions = getAllSessions();
+  const wrongCount = new Map<number, number>();
+  const last = new Map<number, boolean>();
+  for (const s of sessions) {
+    for (const it of s.items) {
+      if (!it.correct) wrongCount.set(it.vocabId, (wrongCount.get(it.vocabId) ?? 0) + 1);
+      last.set(it.vocabId, it.correct);
+    }
+  }
+  // 直近が正解の語は復習対象から外す
+  for (const [id, ok] of last) {
+    if (ok) wrongCount.delete(id);
+  }
+  return wrongCount;
+}
+export function getAllSessions(): SessionResult[] {
+  // "use client" 前提だが、SSR 経由で呼ばれても安全に
+  if (typeof window === "undefined") return [];
+  return readJSON<SessionResult[]>(SESSIONS_KEY, []);
+}
+
+// 最後に回答した結果（vocabId -> 最終が正解なら true、誤答なら false）
+export function getLastOutcomeMap(): Map<number, boolean> {
+  const last = new Map<number, boolean>();
+  for (const s of getAllSessions()) {
+    for (const it of s.items) {
+      last.set(it.vocabId, it.correct);
+    }
+  }
+  return last;
+}
+
+// 一度でも出題された語集合
+export function getSeenSet(): Set<number> {
+  const seen = new Set<number>();
+  for (const s of getAllSessions()) {
+    for (const it of s.items) seen.add(it.vocabId);
+  }
+  return seen;
 }
