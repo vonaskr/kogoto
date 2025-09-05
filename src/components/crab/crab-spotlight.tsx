@@ -24,6 +24,7 @@ export function CrabSpotlight() {
   const [points, setPoints] = useState(0);
   const [affinity, setAffinity] = useState(0); // 0..1
   const [level, setLevel] = useState(1);
+  const affPct = Math.round(affinity * 100); // 0..100
   const feedItems = useMemo(
     () => [
       { id: "a", name: "えび",   emoji: "🦐", cost: 10, exp: 0.06 },
@@ -135,8 +136,22 @@ export function CrabSpotlight() {
                 Lv: <strong>{level}</strong>
               </span>
               <span className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-3 py-1 bg-[var(--card)] text-sm">
-                友好度: <strong>{Math.round(affinity * 100)}%</strong>
+                友好度: <strong>{affPct}%</strong>
               </span>
+            </div>
+            {/* 次レベルまでのプログレス（テーマトークンのみ使用） */}
+            <div className="mb-4">
+              <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--primary)_14%,var(--background))]">
+                <div
+                  className="h-3 rounded bg-[var(--primary)]"
+                  style={{ width: `${affPct}%` }}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={affPct}
+                  role="progressbar"
+                />
+              </div>
+              <div className="mt-1 text-xs opacity-70">次のレベルまで：{Math.max(0, 100 - affPct)}%</div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {feedItems.map((f) => (
