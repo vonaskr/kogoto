@@ -9,191 +9,322 @@ import { loadVocabCsv, type Vocab } from "@/lib/vocab";
 import { speak } from "@/lib/tts";
 import { sfx } from "@/lib/sfx";
 import { saveSession } from "@/lib/store";
+import { useMetronome } from "@/lib/use-metronome";
 
 export default function Ambiguous() {
-   const videoRef = useRef<HTMLVideoElement | null>(null);
-   const [camReady, setCamReady] = useState<"idle" | "on" | "off" | "error">("idle");
-   const [score, setScore] = useState<{ smile: number; frown: number }>({ smile: 0.5, frown: 0.5 });
-   const [pool, setPool] = useState<Vocab[]>([]);
-   const [idx, setIdx] = useState(0);
-   const current = pool[idx];
+  // ==== カメラ / 表情 ====
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [camReady, setCamReady] = useState<"idle" | "on" | "off" | "error">("idle");
+  const [score, setScore] = useState<{ smile: number; frown: number }>({ smile: 0.5, frown: 0.5 });
 
-   // EMA & 連続カウント（誤検知抑制）
-   const emaRef = useRef({ smile: 0.5, frown: 0.5, posRun: 0, negRun: 0 });
-   const TH = 0.65, RUN = 15, MARGIN = 0.08, ALPHA = 0.25;
+  // EMA & 連続カウント（誤検知抑制）
+  const emaRef = useRef({ smile: 0.5, frown: 0.5, posRun: 0, negRun: 0 });
+  const TH = 0.65, RUN = 15, MARGIN = 0.08, ALPHA = 0.25;
 
-   async function startCamera() {
-      setCamReady("idle");
-     if (!navigator.mediaDevices?.getUserMedia) {
-       console.error("getUserMedia unsupported");
-       setCamReady("error");
-       return;
-     }
-     try {
-       const stream = await navigator.mediaDevices.getUserMedia({
-         video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-         audio: false,
-       });
-       if (!videoRef.current) return;
-       videoRef.current.srcObject = stream;
-       // メタデータ読み込み後に play（たまに必要）
-       await new Promise<void>((res) => {
-         const v = videoRef.current!;
-         if (v.readyState >= 2) return res();
-         v.onloadedmetadata = () => res();
-       });
-       await videoRef.current.play();
-     } catch (e: any) {
-       console.error("Camera error:", e?.name, e?.message, e);
-       setCamReady("error");
-       return;
-     }
-     try {
-       await initFace();
-     } catch (e: any) {
-       console.error("MediaPipe init error:", e?.name, e?.message, e);
-       setCamReady("error");
-       return;
-     }
-     try {
-        startFaceStream(videoRef.current!, {
-         onScore: (s) => {
-           // EMA更新
-           const e = emaRef.current;
-           e.smile = e.smile + ALPHA * (s.smile - e.smile);
-           e.frown = e.frown + ALPHA * (s.frown - e.frown);
-           setScore({ smile: e.smile, frown: e.frown });
-           // しきい値＋連続判定
-           const posHit = e.smile > TH && e.smile - e.frown > MARGIN;
-           const negHit = e.frown > TH && e.frown - e.smile > MARGIN;
-           e.posRun = posHit ? e.posRun + 1 : 0;
-           e.negRun = negHit ? e.negRun + 1 : 0;
-           if (e.posRun >= RUN) decide("pos");
-           else if (e.negRun >= RUN) decide("neg");
-         },
-         fps: 20,
-         inputSize: 128,
-       });
-       setCamReady("on");
-     } catch (e: any) {
-       console.error("Face stream error:", e?.name, e?.message, e);
-       setCamReady("error");
-     }
-   }
+  // ==== 出題プール ====
+  const [pool, setPool] = useState<Vocab[]>([]);
+  const [idx, setIdx] = useState(0);
+  const current = pool[idx];
 
-   function stopCamera() {
-     try {
-       stopFaceStream();
-       const tracks = (videoRef.current?.srcObject as MediaStream | null)?.getTracks() ?? [];
-       tracks.forEach((t) => t.stop());
-       if (videoRef.current) videoRef.current.srcObject = null;
-     } finally {
-       setCamReady("off");
-     }
-   }
+  // ==== リズム & フェーズ ====
+  const [phase, setPhase] = useState<"idle" | "prompt" | "answering" | "judge">("idle");
+  const beatsInPhaseRef = useRef(0); // そのフェーズ内で経過した拍数
+  const [judgeMark, setJudgeMark] = useState<"ok" | "ng" | null>(null); // ○ × オーバーレイ
+  const lockRef = useRef(false); // 二重判定防止
 
-   useEffect(() => {
-     // 出題プール読み込み（neutralは除外・軽くシャッフル）
-     (async () => {
-       const all = await loadVocabCsv("/vocab.csv");
-       const filtered = all.filter(v => v.nuance === "pos" || v.nuance === "neg");
-       setPool(filtered.sort(() => Math.random() - 0.5));
-     })();
-     return () => { stopCamera(); disposeFace(); };
-   }, []);
+  const { start: startMetro, stop: stopMetro, isRunning } = useMetronome(90, (beat) => {
+    // 4分音符ごと（=1拍）に呼ばれる
+    beatsInPhaseRef.current += 1;
 
-   useEffect(() => {
-     if (current) speak(current.word, { lang: "ja-JP", rate: 0.95 });
-   }, [idx]); // 次の語でTTS
+    if (phase === "prompt" && beat === 1 && current) {
+      // 1拍目でTTS提示
+      speak(current.word, { lang: "ja-JP", rate: 0.95 });
+      // すぐ回答フェーズへ（以降 3拍受付）
+      setPhase("answering");
+      beatsInPhaseRef.current = 0;
+    } else if (phase === "answering") {
+      if (beatsInPhaseRef.current >= 3) {
+        // タイムアップ → その瞬間の優位で自動決定
+        const chosen: "pos" | "neg" = emaRef.current.smile >= emaRef.current.frown ? "pos" : "neg";
+        doJudge(chosen);
+      }
+    } else if (phase === "judge") {
+      // 判定表示は3拍（ご要望）。終わったら次の問題へ
+      if (beatsInPhaseRef.current >= 3) {
+        setJudgeMark(null);
+        beatsInPhaseRef.current = 0;
+        lockRef.current = false;
+        setPhase("prompt");
+        next();
+      }
+    }
+  });
 
-   function next() {
-     emaRef.current = { smile: 0.5, frown: 0.5, posRun: 0, negRun: 0 };
-     setIdx((i) => (i + 1) % Math.max(1, pool.length));
-   }
+  // ==== カメラ操作 ====
+  async function startCamera() {
+    setCamReady("idle");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      console.error("getUserMedia unsupported");
+      setCamReady("error");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      if (!videoRef.current) return;
+      videoRef.current.srcObject = stream;
+      await new Promise<void>((res) => {
+        const v = videoRef.current!;
+        if (v.readyState >= 2) return res();
+        v.onloadedmetadata = () => res();
+      });
+      await videoRef.current.play();
+    } catch (e: any) {
+      console.error("Camera error:", e?.name, e?.message, e);
+      setCamReady("error");
+      return;
+    }
+    try {
+      await initFace();
+    } catch (e: any) {
+      console.error("MediaPipe init error:", e?.name, e?.message, e);
+      setCamReady("error");
+      return;
+    }
+    try {
+      startFaceStream(videoRef.current!, {
+        onScore: (s) => {
+          // EMA更新
+          const e = emaRef.current;
+          e.smile = e.smile + ALPHA * (s.smile - e.smile);
+          e.frown = e.frown + ALPHA * (s.frown - e.frown);
+          setScore({ smile: e.smile, frown: e.frown });
 
-   function decide(chosen: "pos" | "neg") {
-     if (!current) return;
-     const correct = current.nuance === chosen;
-     correct ? sfx.ok() : sfx.ng();
-     // 1問=1セッションで最小保存（後でまとめ保存に変更可）
-     saveSession({
-       id: `${Date.now()}`,
-       startedAt: Date.now(),
-       items: [{
-         vocabId: current.id,
-         word: current.word,
-         correctText: current.nuance === "pos" ? "ポジ" : "ネガ",
-         chosenText: chosen === "pos" ? "ポジ" : "ネガ",
-         correct,
-       }],
-       correctRate: correct ? 1 : 0,
-       comboMax: correct ? 1 : 0,
-       earnedPoints: correct ? 1 : 0,
-       wrongIds: correct ? [] : [current.id],
-     });
-     next();
-   }
+          // 追加の自動確定（しきい値 連続RUN）※タイムアップ判定と二段構え
+          if (phase === "answering" && !lockRef.current) {
+            const posHit = e.smile > TH && e.smile - e.frown > MARGIN;
+            const negHit = e.frown > TH && e.frown - e.smile > MARGIN;
+            e.posRun = posHit ? e.posRun + 1 : 0;
+            e.negRun = negHit ? e.negRun + 1 : 0;
+            if (e.posRun >= RUN) doJudge("pos");
+            else if (e.negRun >= RUN) doJudge("neg");
+          } else {
+            // answering 以外では走らせない
+            e.posRun = 0; e.negRun = 0;
+          }
+        },
+        fps: 20,
+        inputSize: 128,
+      });
+      setCamReady("on");
+    } catch (e: any) {
+      console.error("Face stream error:", e?.name, e?.message, e);
+      setCamReady("error");
+    }
+  }
+
+  function stopCamera() {
+    try {
+      stopFaceStream();
+      const tracks = (videoRef.current?.srcObject as MediaStream | null)?.getTracks() ?? [];
+      tracks.forEach((t) => t.stop());
+      if (videoRef.current) videoRef.current.srcObject = null;
+    } finally {
+      setCamReady("off");
+    }
+  }
+
+  // ==== 出題プールロード & クリーンアップ ====
+  useEffect(() => {
+    (async () => {
+      const all = await loadVocabCsv("/vocab.csv");
+      // neutral は除外
+      const filtered = all.filter((v) => v.nuance === "pos" || v.nuance === "neg");
+      // 軽いシャッフル
+      setPool(filtered.sort(() => Math.random() - 0.5));
+    })();
+    return () => {
+      stopCamera();
+      disposeFace();
+      stopMetro();
+    };
+  }, [stopMetro]);
+
+  // ==== 手動ボタン決定 ====
+  function decide(chosen: "pos" | "neg") {
+    if (phase !== "answering" || !current) return;
+    doJudge(chosen);
+  }
+
+  // ==== 判定処理 ====
+  function doJudge(chosen: "pos" | "neg") {
+    if (lockRef.current || !current) return;
+    lockRef.current = true;
+    const correct = current.nuance === chosen;
+    correct ? sfx.ok() : sfx.ng();
+    setJudgeMark(correct ? "ok" : "ng");
+    setPhase("judge");
+    beatsInPhaseRef.current = 0;
+
+    // セッション保存（最小1問単位）
+    saveSession({
+      id: `${Date.now()}`,
+      startedAt: Date.now(),
+      items: [
+        {
+          vocabId: current.id,
+          word: current.word,
+          correctText: current.nuance === "pos" ? "ポジティブ" : "ネガティブ",
+          chosenText: chosen === "pos" ? "ポジティブ" : "ネガティブ",
+          correct,
+        },
+      ],
+      correctRate: correct ? 1 : 0,
+      comboMax: correct ? 1 : 0,
+      earnedPoints: correct ? 1 : 0,
+      wrongIds: correct ? [] : [current.id],
+    });
+  }
+
+  // ==== 次の問題へ ====
+  function next() {
+    emaRef.current = { smile: 0.5, frown: 0.5, posRun: 0, negRun: 0 };
+    setIdx((i) => (i + 1) % Math.max(1, pool.length));
+  }
+
+  // ==== 選択肢ハイライト ====
+  const posActive = phase === "answering" && score.smile - score.frown > 0.04;
+  const negActive = phase === "answering" && score.frown - score.smile > 0.04;
+
+  // ==== 回答タイマー可視化（3拍） ====
+  const timerPct = phase === "answering" ? Math.min(100, (beatsInPhaseRef.current / 3) * 100) : 0;
+
+  // ==== クイズ開始 ====
+  function startQuiz() {
+    if (!current) return;
+    setJudgeMark(null);
+    lockRef.current = false;
+    beatsInPhaseRef.current = 0;
+    setPhase("prompt");
+    if (!isRunning) startMetro(); // Tone.start()はボタン押下内
+  }
 
   return (
     <Container>
-      <Card>
-        <CardContent className="p-6 md:p-8">
-          <h1 className="h1-fluid mb-4">曖昧クイズ（MVP配線）</h1>
-           <p className="mb-4 opacity-80">
-             カメラ許諾→表情スコア（smile/frown）を取得。拒否やエラー時はボタンで回答。
-           </p>
-            {current && (
-              <div className="mb-4 text-2xl font-bold">{current.word}</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 出題カード */}
+        <Card pressable={false}>
+          <CardContent className="p-6 md:p-8 relative">
+            <div className="mb-4 flex items-center justify-between">
+              <h1 className="h1-fluid">曖昧クイズ</h1>
+              <div className="flex gap-2">
+                {!isRunning ? (
+                  <Button onClick={startQuiz}>開始</Button>
+                ) : (
+                  <Button variant="surface" onClick={() => { stopMetro(); setPhase("idle"); }}>停止</Button>
+                )}
+              </div>
+            </div>
+
+            {/* 単語 */}
+            <div className="mb-6 text-4xl md:text-5xl font-bold tracking-wide">
+              {current ? current.word : "読み込み中..."}
+            </div>
+
+            {/* 選択肢（表情に応じて強調） */}
+            <div className="mb-4 flex gap-3">
+              <Button
+                variant={posActive ? "accent" : "surface"}
+                onClick={() => decide("pos")}
+                className="flex-1"
+              >
+                ポジティブ
+              </Button>
+              <Button
+                variant={negActive ? "accent" : "surface"}
+                onClick={() => decide("neg")}
+                className="flex-1"
+              >
+                ネガティブ
+              </Button>
+            </div>
+
+            {/* 回答タイマー（3拍） */}
+            <div className="h-2 w-full rounded bg-[color-mix(in_srgb,var(--border)_25%,var(--background))]">
+              <div
+                className="h-2 rounded bg-[var(--primary)] transition-[width] duration-150"
+                style={{ width: `${timerPct}%` }}
+              />
+            </div>
+
+            {/* 判定オーバーレイ（○×） */}
+            {judgeMark && (
+              <div className="absolute inset-0 grid place-items-center pointer-events-none">
+                <div
+                  className="text-[min(18vw,160px)] font-extrabold"
+                  style={{
+                    color: "var(--foreground)",
+                    textShadow: "0 0 0 var(--border-strong)",
+                  }}
+                >
+                  {judgeMark === "ok" ? "○" : "×"}
+                </div>
+              </div>
             )}
-           {/* カメラ操作行 */}
-           <div className="mb-4 flex flex-wrap items-center gap-3">
-             {camReady !== "on" ? (
-               <Button onClick={startCamera}>カメラを使う</Button>
-             ) : (
-               <Button variant="surface" onClick={stopCamera}>カメラを止める</Button>
-             )}
-             <span className="text-sm opacity-70">
-               状態: {camReady === "idle" && "未開始"}
-               {camReady === "on" && "動作中"}
-               {camReady === "off" && "停止"}
-               {camReady === "error" && "エラー/拒否"}
-             </span>
-           </div>
-
-           {/* プレビュー＆ゲージ（負荷を抑えるため小さめ） */}
-           <div className="mb-6 flex items-end gap-4">
-             <video
-               ref={videoRef}
-               className="h-28 w-36 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] object-cover"
-               muted
-               playsInline
-               autoPlay
-             />
-             <div className="flex-1">
-               <div className="mb-2 text-sm opacity-70">smile {Math.round(score.smile * 100)}%</div>
-               <div className="mb-3 h-3 w-full rounded bg-[color-mix(in_srgb,var(--primary)_15%,var(--background))]">
-                 <div
-                   className="h-3 rounded bg-[var(--primary)]"
-                   style={{ width: `${Math.round(score.smile * 100)}%` }}
-                 />
-               </div>
-               <div className="mb-2 text-sm opacity-70">frown {Math.round(score.frown * 100)}%</div>
-               <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--accent)_15%,var(--background))]">
-                 <div
-                   className="h-3 rounded bg-[var(--accent)]"
-                   style={{ width: `${Math.round(score.frown * 100)}%` }}
-                 />
-               </div>
-             </div>
-           </div>
-
-            {/* 回答UI：カメラOKでも手動入力できるよう残す */}
-           <div className="flex gap-3">
-             <Button variant="accent" onClick={() => decide("pos")}>ポジ</Button>
-             <Button variant="surface" onClick={() => decide("neg")}>ネガ</Button>
-           </div>
           </CardContent>
         </Card>
-      </Container>
-    );
-  }
+
+        {/* カメラカード */}
+        <Card pressable={false}>
+          <CardContent className="p-6 md:p-8">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="font-semibold">カメラ</div>
+              <div className="text-sm opacity-70">
+                状態：{camReady === "idle" && "未開始"}
+                {camReady === "on" && "動作中"}
+                {camReady === "off" && "停止"}
+                {camReady === "error" && "エラー/拒否"}
+              </div>
+            </div>
+            <div className="mb-4">
+              <video
+                ref={videoRef}
+                className="w-full h-48 md:h-56 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] object-cover bg-[color-mix(in_srgb,var(--card)_70%,var(--background))]"
+                muted
+                playsInline
+                autoPlay
+              />
+            </div>
+            <div className="mb-6 flex gap-2">
+              {camReady !== "on" ? (
+                <Button onClick={startCamera}>カメラを使う</Button>
+              ) : (
+                <Button variant="surface" onClick={stopCamera}>カメラを止める</Button>
+              )}
+            </div>
+
+            {/* 表情ゲージ */}
+            <div className="space-y-3">
+              <div className="text-sm opacity-70">smile {Math.round(score.smile * 100)}%</div>
+              <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--primary)_15%,var(--background))]">
+                <div
+                  className="h-3 rounded bg-[var(--primary)]"
+                  style={{ width: `${Math.round(score.smile * 100)}%` }}
+                />
+              </div>
+              <div className="text-sm opacity-70">frown {Math.round(score.frown * 100)}%</div>
+              <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--accent)_15%,var(--background))]">
+                <div
+                  className="h-3 rounded bg-[var(--accent)]"
+                  style={{ width: `${Math.round(score.frown * 100)}%` }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </Container>
+  );
+}
