@@ -17,7 +17,6 @@ import { saveSession, type SessionItem } from "@/lib/store";
 const QUIZ_COUNT = 5;
 const DEFAULT_BPM = 90;
 
-// フェーズ：拍に同期
 type Phase = "ready" | "prompt" | "choices" | "judge" | "interlude";
 
 export default function RhythmPlay() {
@@ -36,17 +35,20 @@ export default function RhythmPlay() {
 
   const [correct, setCorrect] = useState(0);
   const [streak, setStreak] = useState(0);
-  const [maxStreak, setMaxStreak] = useState(0); // ★ 追加（エラー①③の原因）
+  const [maxStreak, setMaxStreak] = useState(0);
   const justStartedRef = useRef(false);
 
-  // 準備：辞書→問題生成
+  const barBeatRef = useRef(0);              // 1..8 管理
+  const judgedThisCycleRef = useRef(false);  // 二重判定防止
+
+  // 辞書ロードと問題生成
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
         const vocab = await loadVocabCsv("/vocab.csv");
         if (!vocab.length) throw new Error("辞書が空です");
-        const weight = new Map<number, number>(); // 直近誤答の重み（後で注入）
+        const weight = new Map<number, number>(); // TODO: 誤答重みづけ
         const quiz = buildQuizSet(vocab, QUIZ_COUNT, weight);
         if (!quiz.length) throw new Error("問題が生成できませんでした");
         setQs(quiz);
@@ -64,18 +66,74 @@ export default function RhythmPlay() {
   const q = qs[idx];
   const progress = qs.length ? (idx / qs.length) * 100 : 0;
 
-  // メトロノーム（BPM変更可能）
-  const { bpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, (beat /*1..4*/, _time) => {
-    if (!q) return;
+  // 判定処理（即時 or 自動）
+  const judgeNow = (ok: boolean) => {
+    if (!q || judgedThisCycleRef.current) return;
+    setPhase("judge");
+    judgedThisCycleRef.current = true;
 
-    // 1問 = 1小節相当の拍で制御（簡易MVP）
-    // 拍割り：
-    //  - 1拍目：Prompt（単語提示＋TTS）
-    //  - 3拍目：Choices（4択表示）
-    //  - 4拍目：Judge（締切・自動判定）
-    if (beat === 1) {
+    ok ? sfx.ok() : sfx.ng();
+
+    setCorrect((x) => x + (ok ? 1 : 0));
+    setStreak((s) => {
+      const ns = ok ? s + 1 : 0;
+      setMaxStreak((m: number) => Math.max(m, ns));
+      return ns;
+    });
+
+    const chosenText = selected != null ? q.choices[selected] : null;
+    itemsRef.current.push({
+      vocabId: q.id,
+      word: q.word,
+      correctText: q.choices[q.answer],
+      chosenText,
+      correct: ok,
+    });
+
+    // 演出を見せてから次へ
+    setTimeout(() => {
+      if (idx + 1 < qs.length) {
+        setIdx((i) => i + 1);
+        setPhase("interlude");
+        barBeatRef.current = 0;
+        setSelected(null);
+      } else {
+        // 全問終了
+        const total = qs.length;
+        const nextStreakLocal = ok ? Math.max(maxStreak, streak + 1) : maxStreak;
+        const nextCorrectLocal = ok ? correct + 1 : correct;
+        stop();
+        const wrongIds = itemsRef.current.filter((it) => !it.correct).map((it) => it.vocabId);
+        saveSession({
+          id: String(Date.now()),
+          startedAt: startedAtRef.current,
+          items: itemsRef.current,
+          correctRate: total ? nextCorrectLocal / total : 0,
+          comboMax: nextStreakLocal,
+          earnedPoints: nextCorrectLocal * 10 + nextStreakLocal * 2,
+          wrongIds,
+        });
+        itemsRef.current = [];
+        startedAtRef.current = Date.now();
+        const p = new URLSearchParams({
+          total: String(total),
+          correct: String(nextCorrectLocal),
+          streak: String(nextStreakLocal),
+        });
+        router.push(`/rhythm/result?${p.toString()}`);
+      }
+    }, 380);
+  };
+
+  // メトロノーム
+  const { bpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, (beat /*1..4*/) => {
+    if (!q) return;
+    barBeatRef.current = ((barBeatRef.current % 8) + 1);
+    const b = barBeatRef.current;
+
+    if (b === 1) {
       setPhase("prompt");
-      // スタート直後はすでに speak 済みなので重複させない
+      judgedThisCycleRef.current = false;
       if (justStartedRef.current) {
         justStartedRef.current = false;
       } else {
@@ -84,82 +142,20 @@ export default function RhythmPlay() {
       sfx.click();
     }
 
-    if (beat === 3) {
+    if (b === 2 || b === 3) {
+      sfx.click();
+    }
+
+    if (b === 4) {
       setPhase("choices");
       sfx.click();
     }
 
-    if (beat === 4) {
-      // 自動判定（未選択は×）
-      setPhase("judge");
-      const ok = selected != null && selected === q.answer;
-
-      // SFX
-      ok ? sfx.ok() : sfx.ng();
-
-      // 累計・コンボ
-      setCorrect((x) => x + (ok ? 1 : 0));
-      setStreak((s) => {
-        const ns = ok ? s + 1 : 0;
-        setMaxStreak((m: number) => Math.max(m, ns)); // ★ m に明示型（エラー②の解消）
-        return ns;
-      });
-
-      // セッションアイテム記録
-      const chosenText = selected != null ? q.choices[selected] : null;
-      itemsRef.current.push({
-        vocabId: q.id,
-        word: q.word,
-        correctText: q.choices[q.answer],
-        chosenText,
-        correct: ok,
-      });
-
-      // 次のために選択をクリア
-      setSelected(null);
-
-      // 次問へ（軽い遅延でUIのjudge描画を許可）
-      setTimeout(() => {
-        if (idx + 1 < qs.length) {
-          setIdx((i) => i + 1);
-          setPhase("prompt"); // 次拍で上書きされるが初期化
-        } else {
-          // 終了
-          const total = qs.length;
-
-          // setState 非同期のため、ここでは手元の値から next を算出
-          const nextStreakLocal = ok ? Math.max(maxStreak, streak + 1) : maxStreak;
-          const nextCorrectLocal = ok ? correct + 1 : correct;
-
-          stop();
-
-          // セッション保存
-          const wrongIds = itemsRef.current.filter((it) => !it.correct).map((it) => it.vocabId);
-          const result = {
-            id: String(Date.now()),
-            startedAt: startedAtRef.current,
-            items: itemsRef.current,
-            correctRate: total ? nextCorrectLocal / total : 0,
-            comboMax: nextStreakLocal,
-            earnedPoints: nextCorrectLocal * 10 + nextStreakLocal * 2, // 仮ポイントロジック
-            wrongIds,
-          };
-          saveSession(result);
-          itemsRef.current = [];
-          startedAtRef.current = Date.now();
-
-          const p = new URLSearchParams({
-            total: String(total),
-            correct: String(nextCorrectLocal),
-            streak: String(nextStreakLocal),
-          });
-          router.push(`/rhythm/result?${p.toString()}`);
-        }
-      }, 60);
+    if (b === 8 && !judgedThisCycleRef.current) {
+      judgeNow(false); // 未回答は×
     }
   });
 
-  // 画面離脱時に必ず停止
   useEffect(() => {
     return () => stop();
   }, [stop]);
@@ -167,10 +163,10 @@ export default function RhythmPlay() {
   const startPlay = async () => {
     if (!q) return;
     await start();
-    // 初問は開始直後に確実に読み上げ（環境差・タイミング吸収）
     speak(q.word, { lang: "ja-JP", rate: 0.95 });
     justStartedRef.current = true;
     setPhase("prompt");
+    barBeatRef.current = 0;
   };
 
   const canAnswer = phase === "choices" && isRunning;
@@ -192,10 +188,8 @@ export default function RhythmPlay() {
                   BPM: {bpm} ／ COMBO: {streak}
                 </div>
               </div>
-
               <Progress value={progress} className="mb-6" />
 
-              {/* コントロール（開始/停止） */}
               <div className="flex gap-2 mb-4">
                 {!isRunning ? (
                   <Button onClick={startPlay}>スタート</Button>
@@ -209,8 +203,8 @@ export default function RhythmPlay() {
               <div className="text-2xl font-extrabold mb-2">「{q.word}」の現代語は？</div>
               <div className="text-sm opacity-70 mb-4">
                 {phase === "prompt" && "提示中…（拍1）"}
-                {phase === "choices" && "選択肢をタップ！（拍3）"}
-                {phase === "judge" && "判定中…（拍4）"}
+                {phase === "choices" && "選択肢をタップ！（拍4〜）"}
+                {phase === "judge" && "判定中！"}
                 {phase === "ready" && "スタートを押してね"}
               </div>
 
@@ -222,10 +216,22 @@ export default function RhythmPlay() {
                     size="lg"
                     disabled={!canAnswer}
                     onClick={() => {
+                      if (!canAnswer) return;
                       setSelected(idxChoice);
                       sfx.click();
+                      judgeNow(idxChoice === q.answer);
                     }}
-                    className={selected === idxChoice ? "outline outline-4" : ""}
+                    className={
+                      phase === "judge"
+                        ? idxChoice === q.answer
+                          ? "bg-green-300"
+                          : selected === idxChoice
+                          ? "bg-red-300"
+                          : "opacity-70"
+                        : selected === idxChoice
+                        ? "outline outline-4"
+                        : ""
+                    }
                   >
                     {txt}
                   </Button>
