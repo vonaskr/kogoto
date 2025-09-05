@@ -42,7 +42,12 @@ export default function Ambiguous() {
       // すぐ回答フェーズへ（以降 3拍受付）
       setPhase("answering");
       beatsInPhaseRef.current = 0;
+      sfx.click(); // 回答フェーズ突入の合図
     } else if (phase === "answering") {
+      // 1拍目と3拍目にクリックSE（テンポ感の合図）
+      if (beatsInPhaseRef.current === 1 || beatsInPhaseRef.current === 3) {
+        sfx.click();
+      }
       if (beatsInPhaseRef.current >= 3) {
         // タイムアップ → その瞬間の優位で自動決定
         const chosen: "pos" | "neg" = emaRef.current.smile >= emaRef.current.frown ? "pos" : "neg";
@@ -258,7 +263,24 @@ export default function Ambiguous() {
                 style={{ width: `${timerPct}%` }}
               />
             </div>
-
+            {/* ビート目盛り（●●●） */}
+            <div className="mt-2 flex gap-2">
+              {[1,2,3].map((n) => {
+                const active = phase === "answering" && beatsInPhaseRef.current >= n;
+                return (
+                  <div
+                    key={n}
+                    className="h-2 w-full rounded border-2"
+                    style={{
+                      borderColor: "var(--border-strong)",
+                      background: active
+                        ? "color-mix(in srgb, var(--primary) 60%, var(--background))"
+                        : "color-mix(in srgb, var(--border) 30%, var(--background))",
+                    }}
+                  />
+                );
+              })}
+            </div>
             {/* 判定オーバーレイ（○×） */}
             {judgeMark && (
               <div className="absolute inset-0 grid place-items-center pointer-events-none">
