@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Container } from "@/components/layout/container";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { buildQuizSet, type Quiz } from "@/lib/question-engine";
 import { useMetronome } from "@/lib/use-metronome";
 import { speak } from "@/lib/tts";
 import { sfx } from "@/lib/sfx";
-import { saveSession, type SessionItem } from "@/lib/store";
+import { saveSession, type SessionItem, getWrongWeights } from "@/lib/store";
 
 const QUIZ_COUNT = 5;
 const DEFAULT_BPM = 90;
@@ -21,7 +21,9 @@ type Phase = "ready" | "prompt" | "choices" | "judge" | "interlude";
 
 export default function RhythmPlay() {
   const router = useRouter();
+  const sp = useSearchParams();
 
+  const reviewMode = (sp.get("mode") === "review");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -48,9 +50,13 @@ export default function RhythmPlay() {
         setLoading(true);
         const vocab = await loadVocabCsv("/vocab.csv");
         if (!vocab.length) throw new Error("辞書が空です");
-        const weight = new Map<number, number>(); // TODO: 誤答重みづけ
-        const quiz = buildQuizSet(vocab, QUIZ_COUNT, weight);
-        if (!quiz.length) throw new Error("問題が生成できませんでした");
+        const weight = getWrongWeights(); // ★ 直近誤答の重み
+        const quiz = buildQuizSet(vocab, QUIZ_COUNT, weight, { reviewOnly: reviewMode });
+        if (reviewMode) {
+            throw new Error("復習対象がありません（誤答履歴が空です）");
+          } else {
+            throw new Error("問題が生成できませんでした");
+          }
         setQs(quiz);
         setIdx(0);
         setPhase("ready");
@@ -192,7 +198,9 @@ export default function RhythmPlay() {
 
               <div className="flex gap-2 mb-4">
                 {!isRunning ? (
-                  <Button onClick={startPlay}>スタート</Button>
+                  <Button onClick={startPlay} disabled={!!err}>
+                    {reviewMode ? "復習スタート" : "スタート"}
+                  </Button>
                 ) : (
                   <Button variant="accent" onClick={stop}>
                     ストップ
@@ -205,7 +213,7 @@ export default function RhythmPlay() {
                 {phase === "prompt" && "提示中…（拍1）"}
                 {phase === "choices" && "選択肢をタップ！（拍4〜）"}
                 {phase === "judge" && "判定中！"}
-                {phase === "ready" && "スタートを押してね"}
+                {phase === "ready" && (reviewMode ? "復習対象から出題します" : "スタートを押してね")}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -9,10 +9,15 @@ export default function RhythmHub() {
       <Card>
         <CardContent className="p-6 md:p-8">
           <h1 className="h1-fluid mb-4">リズム学習（ハブ）</h1>
-          <p className="mb-6 opacity-80">ここから出題に進みます（ダミー）。</p>
-          <Button asChild>
-             <Link href="/rhythm/play">スタート</Link>
-          </Button>
+          <p className="mb-6 opacity-80">通常／復習のどちらかを選んで開始します。</p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button asChild>
+              <Link href="/rhythm/play">通常モード</Link>
+            </Button>
+            <Button asChild variant="accent">
+              <Link href="/rhythm/play?mode=review">復習モード</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </Container>

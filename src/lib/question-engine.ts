@@ -1,16 +1,7 @@
 // src/lib/question-engine.ts
 import type { Vocab } from "./vocab";
 
-export type Quiz = { id: number; word: string; correct: string; choices: string[]; answer: number };
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = (Math.random() * (i + 1)) | 0;
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
+export type Quiz = { id: number; word: string; choices: string[]; answer: number };
 
 export function makeQuestion(target: Vocab, pool: Vocab[], wrongIdsWeight?: Map<number, number>): Quiz | null {
   const samePart = pool.filter(v => v.part === target.part && v.id !== target.id);
@@ -54,12 +45,71 @@ export function makeQuestion(target: Vocab, pool: Vocab[], wrongIdsWeight?: Map<
   return { id: target.id, word: target.word, correct: correctText, choices, answer };
 }
 
-export function buildQuizSet(pool: Vocab[], count: number, wrongIdsWeight?: Map<number, number>): Quiz[] {
-  const chosen = shuffle(pool).slice(0, count);
-  const out: Quiz[] = [];
-  for (const t of chosen) {
-    const q = makeQuestion(t, pool, wrongIdsWeight);
-    if (q) out.push(q);
+
+export function buildQuizSet(
+  vocab: Vocab[],
+  count: number,
+  weight: Map<number, number> = new Map(),
+  opts?: { reviewOnly?: boolean }
+) {
+  // 1) 候補プールの作成
+  let pool = vocab.slice();
+  if (opts?.reviewOnly) {
+    const wrongIds = new Set([...weight.keys()]);
+    pool = pool.filter(v => wrongIds.has(v.id));
   }
-  return out;
+  if (!pool.length) return [];
+
+  // 2) 重み（誤答が多いほど選ばれやすい）: base=1, w=1+alpha*count
+  const alpha = 2.0;
+  const weighted = pool.map(v => {
+    const w = 1 + alpha * (weight.get(v.id) ?? 0);
+    return { v, w };
+  });
+  const pickWeighted = () => {
+    const total = weighted.reduce((s, x) => s + x.w, 0);
+    let r = Math.random() * total;
+    for (const x of weighted) {
+      if ((r -= x.w) <= 0) return x.v;
+    }
+    return weighted[weighted.length - 1].v;
+  };
+
+  const seen = new Set<number>();
+  const picked: Vocab[] = [];
+  while (picked.length < count && seen.size < weighted.length) {
+    const v = pickWeighted();
+    if (seen.has(v.id)) continue;
+    seen.add(v.id);
+    picked.push(v);
+  }
+
+  // 3) 4択生成（同品詞から 1 正解 + 3 誤選択）
+  const byPos = new Map<string, Vocab[]>();
+  for (const v of vocab) {
+    if (!byPos.has(v.part)) byPos.set(v.part, []);
+    byPos.get(v.part)!.push(v);
+  }
+  const makeChoices = (v: Vocab) => {
+    const bank = (byPos.get(v.part) ?? vocab).filter(x => x.id !== v.id);
+    const wrongs = shuffle(bank).slice(0, 3).map(x => x.meanings[0]);
+    const correct = v.meanings[0];
+    const arr = shuffle([correct, ...wrongs]);
+    const answer = arr.indexOf(correct);
+    return { choices: arr, answer };
+  };
+
+  return picked.map(v => {
+    const { choices, answer } = makeChoices(v);
+    return { id: v.id, word: v.word, choices, answer };
+  });
 }
+
+function shuffle<T>(a: T[]): T[] {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
