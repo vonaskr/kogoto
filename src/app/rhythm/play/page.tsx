@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Container } from "@/components/layout/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,9 +36,9 @@ export default function RhythmPlay() {
 
   const [correct, setCorrect] = useState(0);
   const [streak, setStreak] = useState(0);
-  const [maxStreak, setMaxStreak] = useState(0);
+  const [maxStreak, setMaxStreak] = useState(0); // ★ 追加（エラー①③の原因）
+  const justStartedRef = useRef(false);
 
-  
   // 準備：辞書→問題生成
   useEffect(() => {
     (async () => {
@@ -65,37 +65,46 @@ export default function RhythmPlay() {
   const progress = qs.length ? (idx / qs.length) * 100 : 0;
 
   // メトロノーム（BPM変更可能）
-  const { bpm, setBpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, (beat /*1..4*/, time) => {
-    // 1問 = 2小節（8拍）。ここでは 1小節ぶんだけ管理し、後段で interlude を使って2小節目に遷移。
+  const { bpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, (beat /*1..4*/, _time) => {
+    if (!q) return;
+
+    // 1問 = 1小節相当の拍で制御（簡易MVP）
     // 拍割り：
     //  - 1拍目：Prompt（単語提示＋TTS）
     //  - 3拍目：Choices（4択表示）
     //  - 4拍目：Judge（締切・自動判定）
-    //  - 2小節目は Interlude（遷移演出用、ここでは即時で次問へ）
-    if (!q) return;
-
     if (beat === 1) {
       setPhase("prompt");
-      // TTSは少し前倒しで呼ぶ（Transport時間は使わず簡易でOK）
-      speak(q.word, { lang: "ja-JP", rate: 0.95 });
+      // スタート直後はすでに speak 済みなので重複させない
+      if (justStartedRef.current) {
+        justStartedRef.current = false;
+      } else {
+        speak(q.word, { lang: "ja-JP", rate: 0.95 });
+      }
       sfx.click();
     }
+
     if (beat === 3) {
       setPhase("choices");
       sfx.click();
     }
+
     if (beat === 4) {
       // 自動判定（未選択は×）
       setPhase("judge");
       const ok = selected != null && selected === q.answer;
+
       // SFX
       ok ? sfx.ok() : sfx.ng();
+
+      // 累計・コンボ
       setCorrect((x) => x + (ok ? 1 : 0));
       setStreak((s) => {
         const ns = ok ? s + 1 : 0;
-        setMaxStreak((m) => Math.max(m, ns));
+        setMaxStreak((m: number) => Math.max(m, ns)); // ★ m に明示型（エラー②の解消）
         return ns;
       });
+
       // セッションアイテム記録
       const chosenText = selected != null ? q.choices[selected] : null;
       itemsRef.current.push({
@@ -105,8 +114,11 @@ export default function RhythmPlay() {
         chosenText,
         correct: ok,
       });
+
+      // 次のために選択をクリア
       setSelected(null);
-      // ここで次問へ（簡易：インターバル無しで遷移）
+
+      // 次問へ（軽い遅延でUIのjudge描画を許可）
       setTimeout(() => {
         if (idx + 1 < qs.length) {
           setIdx((i) => i + 1);
@@ -114,31 +126,36 @@ export default function RhythmPlay() {
         } else {
           // 終了
           const total = qs.length;
-          const nextStreak = ok ? Math.max(maxStreak, streak + 1) : maxStreak;
-          const nextCorrect = ok ? correct + 1 : correct;
+
+          // setState 非同期のため、ここでは手元の値から next を算出
+          const nextStreakLocal = ok ? Math.max(maxStreak, streak + 1) : maxStreak;
+          const nextCorrectLocal = ok ? correct + 1 : correct;
+
           stop();
+
           // セッション保存
-          const wrongIds = itemsRef.current.filter(it => !it.correct).map(it => it.vocabId);
+          const wrongIds = itemsRef.current.filter((it) => !it.correct).map((it) => it.vocabId);
           const result = {
             id: String(Date.now()),
             startedAt: startedAtRef.current,
             items: itemsRef.current,
-            correctRate: total ? nextCorrect / total : 0,
-            comboMax: nextStreak,
-            earnedPoints: nextCorrect * 10 + nextStreak * 2, // 仮ポイントロジック
+            correctRate: total ? nextCorrectLocal / total : 0,
+            comboMax: nextStreakLocal,
+            earnedPoints: nextCorrectLocal * 10 + nextStreakLocal * 2, // 仮ポイントロジック
             wrongIds,
           };
           saveSession(result);
           itemsRef.current = [];
           startedAtRef.current = Date.now();
+
           const p = new URLSearchParams({
             total: String(total),
-            correct: String(nextCorrect),
-            streak: String(nextStreak),
+            correct: String(nextCorrectLocal),
+            streak: String(nextStreakLocal),
           });
           router.push(`/rhythm/result?${p.toString()}`);
         }
-      }, 60); // 軽い遅延でUIのjudge描画を許可
+      }, 60);
     }
   });
 
@@ -150,6 +167,9 @@ export default function RhythmPlay() {
   const startPlay = async () => {
     if (!q) return;
     await start();
+    // 初問は開始直後に確実に読み上げ（環境差・タイミング吸収）
+    speak(q.word, { lang: "ja-JP", rate: 0.95 });
+    justStartedRef.current = true;
     setPhase("prompt");
   };
 
@@ -165,11 +185,14 @@ export default function RhythmPlay() {
           {!loading && !err && q && (
             <>
               <div className="flex items-center justify-between mb-4">
-                <div className="font-semibold">リズム学習：{idx + 1} / {qs.length}</div>
+                <div className="font-semibold">
+                  リズム学習：{idx + 1} / {qs.length}
+                </div>
                 <div className="text-sm opacity-70">
                   BPM: {bpm} ／ COMBO: {streak}
                 </div>
               </div>
+
               <Progress value={progress} className="mb-6" />
 
               {/* コントロール（開始/停止） */}
@@ -177,13 +200,13 @@ export default function RhythmPlay() {
                 {!isRunning ? (
                   <Button onClick={startPlay}>スタート</Button>
                 ) : (
-                  <Button variant="accent" onClick={stop}>ストップ</Button>
+                  <Button variant="accent" onClick={stop}>
+                    ストップ
+                  </Button>
                 )}
               </div>
 
-              <div className="text-2xl font-extrabold mb-2">
-                「{q.word}」の現代語は？
-              </div>
+              <div className="text-2xl font-extrabold mb-2">「{q.word}」の現代語は？</div>
               <div className="text-sm opacity-70 mb-4">
                 {phase === "prompt" && "提示中…（拍1）"}
                 {phase === "choices" && "選択肢をタップ！（拍3）"}
@@ -198,7 +221,10 @@ export default function RhythmPlay() {
                     variant="surface"
                     size="lg"
                     disabled={!canAnswer}
-                    onClick={() => { setSelected(idxChoice); sfx.click(); }}
+                    onClick={() => {
+                      setSelected(idxChoice);
+                      sfx.click();
+                    }}
                     className={selected === idxChoice ? "outline outline-4" : ""}
                   >
                     {txt}

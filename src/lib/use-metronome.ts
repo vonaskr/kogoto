@@ -16,9 +16,9 @@ export function useMetronome(
   const [isRunning, setIsRunning] = useState(false);
   const schedIdRef = useRef<number | null>(null);
   const beatRef = useRef(0); // 0..3
-  const onBeatRef = useRef<typeof onBeat>();
+  const onBeatRef = useRef<((beat: number, time: number) => void) | null>(null);
   useEffect(() => {
-    onBeatRef.current = onBeat;
+    onBeatRef.current = onBeat ?? null;
   }, [onBeat]);
   
   const clear = useCallback(() => {
@@ -39,7 +39,8 @@ export function useMetronome(
       const oneBased = beatRef.current + 1; // 1..4
       onBeatRef.current?.(oneBased, time);
     }, "4n"); // quarter note
-  }, [bpm, onBeat, clear]);
+  }, [bpm, clear]);
+
 
   const start = useCallback(async () => {
     await Tone.start();         // ユーザー操作内で呼ぶこと
