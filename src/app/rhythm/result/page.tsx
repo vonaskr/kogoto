@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Container } from "@/components/layout/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getLatestSession } from "@/lib/store";
+import { Button } from "@/components/ui/button";
 
 // 最低限の型（store の実体に合わせて緩めに）
 type Item = {
@@ -52,8 +53,12 @@ export default function RhythmResult() {
 
           {/* リンク行（常に同じマークアップで出す：Hydration差分を避ける） */}
           <div className="flex gap-3 mb-6">
-            <Link className="underline" href="/rhythm">もう一度</Link>
-            <Link className="underline" href="/">ホームへ</Link>
+            <Button asChild>
+              <Link href="/rhythm">もう一度</Link>
+            </Button>
+            <Button asChild variant="surface">
+              <Link href="/">ホームへ</Link>
+            </Button>
           </div>
 
           {/* セッション詳細（後からクライアントで追加されても、ページ自体は同じ構造） */}
@@ -64,7 +69,13 @@ export default function RhythmResult() {
                 {items.map((it, i) => (
                   <div
                     key={i}
-                    className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] p-3"
+                    className={
+                      `rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] p-3 ` +
+                      (it.correct
+                        ? "bg-[color-mix(in_srgb,var(--primary)_18%,var(--background))]"
+                        : "bg-[color-mix(in_srgb,var(--accent)_20%,var(--background))]"
+                      )
+                    }
                   >
                     <div className="text-sm opacity-70 mb-1">Q{i + 1}</div>
                     <div className="font-semibold">「{it.word}」</div>

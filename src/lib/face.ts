@@ -128,6 +128,10 @@ export function startFaceStream(
         0.7 * norm(0.12 - browGap, -0.05, 0.12) + // 小さいほど↑
         0.3 * (1 - norm(mouthH, 0.02, 0.18));
 
+      // 口を大きく開けている場合はネガ寄りに補助（悲しい顔作りづらさの救済）
+      const mouthOpenBoost = norm(mouthH, 0.22, 0.45); // 0.22〜で徐々に効く
+      frown = Math.max(frown, mouthOpenBoost);
+
       smile = clamp01(smile);
       frown = clamp01(frown);
 
