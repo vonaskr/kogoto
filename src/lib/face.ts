@@ -18,7 +18,7 @@ export async function initFace() {
   if (vision && landmarker) return;
   const mp = await import("@mediapipe/tasks-vision");
   vision = mp;
-  const wasmPath = "/wasm"; // 既定配置。変更時はここを調整
+  const wasmPath = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
   const fileset = await mp.FilesetResolver.forVisionTasks(wasmPath);
   landmarker = await mp.FaceLandmarker.createFromOptions(fileset, {
     baseOptions: {
@@ -50,7 +50,10 @@ export function startFaceStream(
       lastTs = t;
 
       // MediaPipeにvideoフレームを渡してランドマーク検出
-      const result = await landmarker.detectForVideo(video, t);
+      const result = await landmarker.detectForVideo(
+        video,
+        performance.now() // DOMHighResTimeStamp を明示的に使用
+      );
 
       // ランドマークが無ければ「中立」に近いスコアを返す（UI側でタイムアウト丸め）
       if (!result?.faceLandmarks?.length) {
