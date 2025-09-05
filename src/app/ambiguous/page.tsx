@@ -5,12 +5,22 @@ import { Container } from "@/components/layout/container";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { initFace, startFaceStream, stopFaceStream, disposeFace } from "@/lib/face";
-
+import { loadVocabCsv, type Vocab } from "@/lib/vocab";
+import { speak } from "@/lib/tts";
+import { sfx } from "@/lib/sfx";
+import { saveSession } from "@/lib/store";
 
 export default function Ambiguous() {
    const videoRef = useRef<HTMLVideoElement | null>(null);
    const [camReady, setCamReady] = useState<"idle" | "on" | "off" | "error">("idle");
    const [score, setScore] = useState<{ smile: number; frown: number }>({ smile: 0.5, frown: 0.5 });
+   const [pool, setPool] = useState<Vocab[]>([]);
+   const [idx, setIdx] = useState(0);
+   const current = pool[idx];
+
+   // EMA & 連続カウント（誤検知抑制）
+   const emaRef = useRef({ smile: 0.5, frown: 0.5, posRun: 0, negRun: 0 });
+   const TH = 0.65, RUN = 15, MARGIN = 0.08, ALPHA = 0.25;
 
    async function startCamera() {
       setCamReady("idle");
@@ -46,8 +56,21 @@ export default function Ambiguous() {
        return;
      }
      try {
-       startFaceStream(videoRef.current!, {
-         onScore: (s) => setScore(s),
+        startFaceStream(videoRef.current!, {
+         onScore: (s) => {
+           // EMA更新
+           const e = emaRef.current;
+           e.smile = e.smile + ALPHA * (s.smile - e.smile);
+           e.frown = e.frown + ALPHA * (s.frown - e.frown);
+           setScore({ smile: e.smile, frown: e.frown });
+           // しきい値＋連続判定
+           const posHit = e.smile > TH && e.smile - e.frown > MARGIN;
+           const negHit = e.frown > TH && e.frown - e.smile > MARGIN;
+           e.posRun = posHit ? e.posRun + 1 : 0;
+           e.negRun = negHit ? e.negRun + 1 : 0;
+           if (e.posRun >= RUN) decide("pos");
+           else if (e.negRun >= RUN) decide("neg");
+         },
          fps: 20,
          inputSize: 128,
        });
@@ -70,11 +93,46 @@ export default function Ambiguous() {
    }
 
    useEffect(() => {
-     return () => {
-       stopCamera();
-       disposeFace();
-     };
+     // 出題プール読み込み（neutralは除外・軽くシャッフル）
+     (async () => {
+       const all = await loadVocabCsv("/vocab.csv");
+       const filtered = all.filter(v => v.nuance === "pos" || v.nuance === "neg");
+       setPool(filtered.sort(() => Math.random() - 0.5));
+     })();
+     return () => { stopCamera(); disposeFace(); };
    }, []);
+
+   useEffect(() => {
+     if (current) speak(current.word, { lang: "ja-JP", rate: 0.95 });
+   }, [idx]); // 次の語でTTS
+
+   function next() {
+     emaRef.current = { smile: 0.5, frown: 0.5, posRun: 0, negRun: 0 };
+     setIdx((i) => (i + 1) % Math.max(1, pool.length));
+   }
+
+   function decide(chosen: "pos" | "neg") {
+     if (!current) return;
+     const correct = current.nuance === chosen;
+     correct ? sfx.ok() : sfx.ng();
+     // 1問=1セッションで最小保存（後でまとめ保存に変更可）
+     saveSession({
+       id: `${Date.now()}`,
+       startedAt: Date.now(),
+       items: [{
+         vocabId: current.id,
+         word: current.word,
+         correctText: current.nuance === "pos" ? "ポジ" : "ネガ",
+         chosenText: chosen === "pos" ? "ポジ" : "ネガ",
+         correct,
+       }],
+       correctRate: correct ? 1 : 0,
+       comboMax: correct ? 1 : 0,
+       earnedPoints: correct ? 1 : 0,
+       wrongIds: correct ? [] : [current.id],
+     });
+     next();
+   }
 
   return (
     <Container>
@@ -84,7 +142,9 @@ export default function Ambiguous() {
            <p className="mb-4 opacity-80">
              カメラ許諾→表情スコア（smile/frown）を取得。拒否やエラー時はボタンで回答。
            </p>
-
+            {current && (
+              <div className="mb-4 text-2xl font-bold">{current.word}</div>
+            )}
            {/* カメラ操作行 */}
            <div className="mb-4 flex flex-wrap items-center gap-3">
              {camReady !== "on" ? (
@@ -127,10 +187,10 @@ export default function Ambiguous() {
              </div>
            </div>
 
-           {/* フォールバック二択（既存） */}
+            {/* 回答UI：カメラOKでも手動入力できるよう残す */}
            <div className="flex gap-3">
-             <Button variant="accent">ポジ</Button>
-             <Button variant="surface">ネガ</Button>
+             <Button variant="accent" onClick={() => decide("pos")}>ポジ</Button>
+             <Button variant="surface" onClick={() => decide("neg")}>ネガ</Button>
            </div>
           </CardContent>
         </Card>
