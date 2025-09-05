@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Container } from "@/components/layout/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getLatestSession } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import { getLatestSession, addPoints, getPoints } from "@/lib/store";
 
 // 最低限の型（store の実体に合わせて緩めに）
 type Item = {
@@ -27,30 +27,56 @@ export default function RhythmResult() {
   const comboMax = Number(sp.get("streak") ?? 0);
   const acc = total > 0 ? Math.round((correct / total) * 100) : 0;
 
+  const [earned, setEarned] = useState(0);
+  const [points, setPoints] = useState(0);
+
   // ② セッションはクライアント側で後から取得（初期は null で固定レンダリング）
   const [session, setSession] = useState<Session | null>(null);
-  // コンボに応じた紙吹雪（3以上で発火）
+    // 正答数に応じた紙吹雪（継続的）
   useEffect(() => {
-    if (comboMax < 3) return;
-    let stop = false;
+    if (correct < 3) return; // 2問未満はなし
+    let active = true;
+    let timer: NodeJS.Timeout;
     (async () => {
       const confetti = (await import("canvas-confetti")).default;
-      const power = comboMax >= 10 ? 1 : comboMax >= 6 ? 0.7 : 0.45;
-      if (stop) return;
-      // 中央 burst
-      confetti({ particleCount: Math.round(180 * power), spread: 70, origin: { y: 0.25 }, scalar: 1 + power * 0.4 });
-      // 左右から
-      confetti({ particleCount: Math.round(120 * power), angle: 60,  spread: 55, origin: { x: 0, y: 0.4 }, scalar: 0.9 + power * 0.3 });
-      confetti({ particleCount: Math.round(120 * power), angle: 120, spread: 55, origin: { x: 1, y: 0.4 }, scalar: 0.9 + power * 0.3 });
+      const power =
+        correct >= 5 ? 1 :
+        correct >= 4 ? 0.7 :
+        0.45;
+      const launch = () => {
+        if (!active) return;
+        confetti({ particleCount: Math.round(160 * power), spread: 70, origin: { y: 0.25 }, scalar: 1 + power * 0.4 });
+        confetti({ particleCount: Math.round(100 * power), angle: 60,  spread: 55, origin: { x: 0, y: 0.4 }, scalar: 0.9 + power * 0.3 });
+        confetti({ particleCount: Math.round(100 * power), angle: 120, spread: 55, origin: { x: 1, y: 0.4 }, scalar: 0.9 + power * 0.3 });
+      };
+      launch(); // 初回すぐ
+      timer = setInterval(launch, 2000); // 2秒ごと
     })();
-    return () => { stop = true; };
-  }, [comboMax]);
+    return () => { active = false; clearInterval(timer); };
+  }, [correct]);
 
   useEffect(() => {
     // getLatestSession はクライアント専用想定
     const s = getLatestSession?.();
     if (s) setSession(s as Session);
   }, []);
+
+  // 一度だけポイント加算（同じセッションで二重加算防止）
+  useEffect(() => {
+    const s = session as any;
+    if (!s?.id) return;
+    const key = "kogoto:lastAwardedSessionId";
+    if (localStorage.getItem(key) === s.id) { setPoints(getPoints()); return; }
+    // 加点ルール：正答×10 + コンボ段階(>=5:+50, >=4:+30, >=2:+10)
+    const combo = Number(sp.get("streak") ?? 0);
+    const comboBonus = combo >= 5 ? 50 : combo >= 4 ? 30 : combo >= 2 ? 10 : 0;
+    const add = correct * 10 + comboBonus;
+    addPoints(add);
+    localStorage.setItem(key, s.id);
+    setEarned(add);
+    setPoints(getPoints());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   // 表示用にメモ化（初回は null → その後に反映）
   const items = useMemo(() => session?.items ?? [], [session]);
@@ -66,6 +92,8 @@ export default function RhythmResult() {
             <li>正答数：{correct} / {total}</li>
             <li>正答率：{acc}%</li>
             <li>最大COMBO：{comboMax}</li>
+            <li>今回の獲得：{earned || (correct*10 + (comboMax>=10?50:comboMax>=6?30:comboMax>=3?10:0))} pt</li>
++           <li>所持ポイント：{points} pt</li>
           </ul>
 
           {/* リンク行（常に同じマークアップで出す：Hydration差分を避ける） */}

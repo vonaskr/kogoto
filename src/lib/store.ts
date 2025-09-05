@@ -119,3 +119,52 @@ export function clearAllProgress() {
   localStorage.removeItem(SESSIONS_KEY);
   localStorage.removeItem(WRONG_KEY);
 }
+
+// ====== ポイント／カニ友好 ======
+const POINTS_KEY = "kogoto:points";
+const CRAB_KEY   = "kogoto:crab"; // { level:number, affinity:number(0-100) }
+
+type CrabState = { level: number; affinity: number };
+
+function readNumber(key: string, fallback = 0) {
+  const v = Number(localStorage.getItem(key));
+  return Number.isFinite(v) ? v : fallback;
+}
+function writeNumber(key: string, v: number) {
+  localStorage.setItem(key, String(Math.max(0, Math.floor(v))));
+}
+function readCrab(): CrabState {
+  try { return JSON.parse(localStorage.getItem(CRAB_KEY) || "") as CrabState; }
+  catch { return { level: 1, affinity: 0 }; }
+}
+function writeCrab(s: CrabState) {
+  localStorage.setItem(CRAB_KEY, JSON.stringify(s));
+}
+
+export function getPoints(): number {
+  return readNumber(POINTS_KEY, 0);
+}
+export function addPoints(delta: number) {
+  const cur = getPoints();
+  writeNumber(POINTS_KEY, cur + Math.max(0, Math.floor(delta)));
+}
+export function spendPoints(cost: number): boolean {
+  const cur = getPoints();
+  if (cur < cost) return false;
+  writeNumber(POINTS_KEY, cur - cost);
+  return true;
+}
+export function getCrabState(): CrabState {
+  const s = readCrab();
+  return { level: s.level || 1, affinity: Math.min(100, Math.max(0, Math.floor(s.affinity || 0))) };
+}
+// ご飯を与える：ポイント消費→友好加算。閾値(100)でレベルアップ＆余剰ロールオーバー
+export function feedCrab(cost: number, affinityGain: number): boolean {
+  if (!spendPoints(cost)) return false;
+  const s = getCrabState();
+  let a = s.affinity + Math.max(0, Math.floor(affinityGain));
+  let lv = s.level;
+  while (a >= 100) { a -= 100; lv += 1; }
+  writeCrab({ level: lv, affinity: a });
+  return true;
+}
