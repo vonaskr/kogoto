@@ -122,8 +122,9 @@ export function clearAllProgress() {
 
 // ====== ポイント／カニ友好 ======
 const POINTS_KEY = "kogoto:points";
-const CRAB_KEY   = "kogoto:crab"; // { level:number, affinity:number(0-100) }
-
+const CRAB_KEY   = "kogoto:crab"; // { level:number, affinity:number(0..CRAB_LEVEL_STEP-1) }
+const CRAB_LEVEL_STEP = 50; // ← レベルアップしやすい設定（元:100）
+export function getCrabLevelStep(){ return CRAB_LEVEL_STEP; }
 type CrabState = { level: number; affinity: number };
 
 function readNumber(key: string, fallback = 0) {
@@ -156,15 +157,18 @@ export function spendPoints(cost: number): boolean {
 }
 export function getCrabState(): CrabState {
   const s = readCrab();
-  return { level: s.level || 1, affinity: Math.min(100, Math.max(0, Math.floor(s.affinity || 0))) };
+  const aff = Math.max(0, Math.floor(s.affinity || 0));
+  // 旧データ(0..100想定)も安全に収める
+  const capped = aff % CRAB_LEVEL_STEP;
+  return { level: (s.level || 1), affinity: capped };
 }
 // ご飯を与える：ポイント消費→友好加算。閾値(100)でレベルアップ＆余剰ロールオーバー
 export function feedCrab(cost: number, affinityGain: number): boolean {
   if (!spendPoints(cost)) return false;
   const s = getCrabState();
-  let a = s.affinity + Math.max(0, Math.floor(affinityGain));
+    let a = s.affinity + Math.max(0, Math.floor(affinityGain));
   let lv = s.level;
-  while (a >= 100) { a -= 100; lv += 1; }
+  while (a >= CRAB_LEVEL_STEP) { a -= CRAB_LEVEL_STEP; lv += 1; }
   writeCrab({ level: lv, affinity: a });
   return true;
 }

@@ -24,7 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="ja">
       <body className="min-h-screen bg-[var(--background)] text-[var(--foreground)] antialiased">
         {/* 背景専用*/}
-        <div className="min-h-screen  dot-bg">
+        <div className="min-h-screen  grid-bg">
           <AppHeader />
           {children}
         </div>

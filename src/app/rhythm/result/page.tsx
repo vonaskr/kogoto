@@ -7,6 +7,7 @@ import { Container } from "@/components/layout/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getLatestSession, addPoints, getPoints } from "@/lib/store";
+import { useRive, useStateMachineInput, Layout, Fit, Alignment } from "@rive-app/react-canvas";
 
 // 最低限の型（store の実体に合わせて緩めに）
 type Item = {
@@ -29,7 +30,14 @@ export default function RhythmResult() {
 
   const [earned, setEarned] = useState(0);
   const [points, setPoints] = useState(0);
-
+  const { rive, RiveComponent } = useRive({
+    src: "/crab.riv",
+    artboard: "Crab",
+    stateMachines: "CrabMachine",
+    autoplay: true,
+    layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
+  });
+  const onCorrectTrig = useStateMachineInput(rive, "CrabMachine", "onCorrect");
   // ② セッションはクライアント側で後から取得（初期は null で固定レンダリング）
   const [session, setSession] = useState<Session | null>(null);
     // 正答数に応じた紙吹雪（継続的）
@@ -77,17 +85,47 @@ export default function RhythmResult() {
     setPoints(getPoints());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
-
+  // Riveお祝い：正答に応じて数回fire（2〜6回）
+  useEffect(() => {
+    if (!onCorrectTrig) return;
+    const n = Math.max(0, Math.min(6, correct + (correct >= 5 ? 1 : 0))) - 1; // 0〜5回
+    if (n <= 0) return;
+    let i = 0;
+    const id = setInterval(() => {
+      onCorrectTrig.fire?.();
+      if (++i >= n) clearInterval(id);
+    }, 500);
+    return () => clearInterval(id);
+  }, [onCorrectTrig, correct]);
   // 表示用にメモ化（初回は null → その後に反映）
   const items = useMemo(() => session?.items ?? [], [session]);
 
   return (
     <Container>
       <Card>
-        <CardHeader>
+        <CardHeader className="relative">
           <CardTitle className="h1-fluid">リザルト</CardTitle>
+          {/* 右上に小さめカニ */}
+          <div className="absolute right-4 top-3 w-[90px] h-[70px] md:w-[120px] md:h-[90px] pointer-events-none">
+            <RiveComponent className="w-full h-full" />
+          </div>
         </CardHeader>
         <CardContent className="p-6 md:p-8">
+          {/* スコアカード（Neo-brutalism風） */}
+          <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] p-4 text-center">
+              <div className="text-sm opacity-70 mb-1">獲得ポイント</div>
+              <div className="text-3xl font-extrabold">{earned || (correct*10 + (comboMax>=10?50:comboMax>=6?30:comboMax>=3?10:0))}pt</div>
+            </div>
+            <div className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] p-4 text-center">
+              <div className="text-sm opacity-70 mb-1">正答</div>
+              <div className="text-3xl font-extrabold">{correct}/{total}</div>
+            </div>
+            <div className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] p-4 text-center">
+              <div className="text-sm opacity-70 mb-1">最大COMBO</div>
+              <div className="text-3xl font-extrabold">{comboMax}</div>
+            </div>
+          </div>
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li>正答数：{correct} / {total}</li>
             <li>正答率：{acc}%</li>
@@ -96,15 +134,12 @@ export default function RhythmResult() {
 +           <li>所持ポイント：{points} pt</li>
           </ul>
 
-          {/* リンク行（常に同じマークアップで出す：Hydration差分を避ける） */}
+          {/* 操作ボタン（統一UI） */}
           <div className="flex gap-3 mb-6">
-            <Button asChild>
-              <Link href="/rhythm">もう一度</Link>
-            </Button>
-            <Button asChild variant="surface">
-              <Link href="/">ホームへ</Link>
-            </Button>
+            <Link href="/rhythm"><Button>もう一度</Button></Link>
+            <Link href="/"><Button variant="surface">ホームへ</Button></Link>
           </div>
+ 
 
           {/* セッション詳細（後からクライアントで追加されても、ページ自体は同じ構造） */}
           {items.length > 0 && (
