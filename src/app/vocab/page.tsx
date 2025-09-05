@@ -20,7 +20,7 @@ import {
 
 type Filter = "all" | "unseen" | "review";
 type Status = "unseen" | "recentOk" | "review";
-type SortKey = "id" | "acc" | "correct" | "part";
+type SortKey = "kana" | "acc" | "correct" | "part";
 
 function statusOf(
   v: Vocab,
@@ -54,7 +54,7 @@ export default function VocabListPage() {
   const [err, setErr] = useState<string | null>(null);
   const [all, setAll] = useState<Vocab[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("id"); // ④ ソートキー
+  const [sortKey, setSortKey] = useState<SortKey>("kana"); 
 
   // 学習記録（スナップショット）
   const maps = useMemo(() => {
@@ -104,13 +104,19 @@ export default function VocabListPage() {
     const arr = filtered.slice();
     arr.sort((a, b) => {
       switch (sortKey) {
+        case "kana": {
+          // 読み（なければ word）で日本語ロケール比較
+          const ak = (a.v.reading || a.v.word || "").toString();
+          const bk = (b.v.reading || b.v.word || "").toString();
+          const cmp = ak.localeCompare(bk, "ja");
+          return cmp !== 0 ? cmp : a.v.id - b.v.id;
+        }
         case "acc":
           return (b.s.acc ?? 0) - (a.s.acc ?? 0);
         case "correct":
           return (b.s.correct ?? 0) - (a.s.correct ?? 0);
         case "part":
           return a.v.part.localeCompare(b.v.part) || a.v.id - b.v.id;
-        case "id":
         default:
           return a.v.id - b.v.id;
       }
@@ -153,7 +159,7 @@ export default function VocabListPage() {
                 onChange={(e) => setSortKey(e.target.value as SortKey)}
                 className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-2 py-1 text-sm"
               >
-                <option value="id">ID順</option>
+                <option value="kana">あいうえお順</option>
                 <option value="acc">正答率（高）</option>
                 <option value="correct">正解数（多）</option>
                 <option value="part">品詞</option>
@@ -195,8 +201,7 @@ export default function VocabListPage() {
                     align="center"
                     className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] shadow-[var(--shadow-strong)] p-4 w-80"
                   >
-                    <div className="text-base font-bold mb-1">「{v.word}」</div>
-                    <div className="text-sm opacity-80">意味：{v.meanings.join(" / ")}</div>
+                    <div className="text-sm opacity-80">すべての意味：{v.meanings.join(" / ")}</div>
                     <div className="text-sm mt-2">
                       正解数：<b>{s.correct}</b>　誤答数：<b>{s.wrong}</b>　出題：<b>{s.seen}</b>
                     </div>

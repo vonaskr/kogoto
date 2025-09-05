@@ -12,7 +12,7 @@ export function HistoryPanel() {
   const progress = Math.round((learnedCount / totalCount) * 100);
 
   return (
-    <Card>
+    <Card pressable={false}>
       <CardHeader className="pb-0">
         <CardTitle>学習履歴</CardTitle>
       </CardHeader>
