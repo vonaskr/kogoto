@@ -90,6 +90,9 @@ export default function Ambiguous() {
     }
   });
 
+  // 画面モード: カメラ利用確認 → クイズ本体
+  const [view, setView] = useState<"consent" | "quiz">("consent");
+
   // ==== カメラ操作 ====
   async function startCamera() {
     setCamReady("idle");
@@ -269,9 +272,6 @@ export default function Ambiguous() {
   const posActive = phase === "answering" && score.smile - score.frown > 0.04;
   const negActive = phase === "answering" && score.frown - score.smile > 0.04;
 
-  // ==== 回答タイマー可視化（3拍） ====
-  const timerPct = phase === "answering" ? Math.min(100, (beatsInPhaseRef.current / 3) * 100) : 0;
-
   // ==== クイズ開始 ====
   function startQuiz() {
     if (!current) return;
@@ -282,8 +282,41 @@ export default function Ambiguous() {
     if (!isRunning) startMetro(); // Tone.start()はボタン押下内
   }
 
+  async function startWithCamera() {
+    await startCamera();
+    setView("quiz");
+    startQuiz();
+  }
+  function startWithoutCamera() {
+    stopCamera(); // 念のため停止状態へ
+    setView("quiz");
+    startQuiz();
+  }
+
   return (
     <Container>
+      {view === "consent" ? (
+        <Card pressable={false}>
+          <CardContent className="p-6 md:p-8">
+            <h1 className="h1-fluid mb-3">カメラを使いますか？</h1>
+            <p className="opacity-80 mb-4">
+              カメラONだと表情で自動回答できます。OFFでもボタンで回答できます。
+            </p>
+            <div className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] p-4 mb-5">
+              <div className="font-semibold mb-2">表情の作り方</div>
+              <ul className="list-disc pl-5 text-sm opacity-80 space-y-1">
+                <li>ポジティブ：口角を上げて<span className="font-semibold">笑顔</span></li>
+                <li>ネガティブ：<span className="font-semibold">しかめ顔</span>、または<strong>口を開ける</strong>（判定補助）</li>
+              </ul>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={startWithCamera}>カメラOKで開始</Button>
+              <Button variant="surface" onClick={startWithoutCamera}>カメラなしで開始</Button>
+              <Button variant="surface" onClick={() => history.back()}>戻る</Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 出題カード */}
         <Card pressable={false}>
@@ -300,20 +333,22 @@ export default function Ambiguous() {
                  {!isRunning ? (
                     <Button onClick={startQuiz}>開始</Button>
                   ) : (
-                    <Button
-                      variant="surface"
-                      onClick={() => {
-                        const summary = finalizeSession();   // ここまでの回答を保存
-                        stopMetro();
-                        if (summary) {
-                          const { total, correct, streak } = summary;
-                          router.push(`/rhythm/result?total=${total}&correct=${correct}&streak=${streak}`);
-                        }
-                        setPhase("idle");
-                      }}
-                    >
-                      やめる
-                    </Button>
+                       <Button
+                        variant="surface"
+                        onClick={() => {
+                          const summary = finalizeSession();   // ここまでの回答を保存
+                          stopMetro();
+                          if (summary && summary.total > 0) {
+                            const { total, correct, streak } = summary;
+                            router.push(`/rhythm/result?total=${total}&correct=${correct}&streak=${streak}`);
+                          } else {
+                            router.push("/"); // 1問も答えていないときはホーム
+                          }
+                          setPhase("idle");
+                        }}
+                      >
+                        やめる
+                      </Button>
                   )}
               </div>
             </div>
@@ -341,13 +376,7 @@ export default function Ambiguous() {
               </Button>
             </div>
 
-            {/* 回答タイマー（3拍） */}
-            <div className="h-2 w-full rounded bg-[color-mix(in_srgb,var(--border)_25%,var(--background))]">
-              <div
-                className="h-2 rounded bg-[var(--primary)] transition-[width] duration-150"
-                style={{ width: `${timerPct}%` }}
-              />
-            </div>
+
             {/* ビート目盛り（●●●） */}
             <div className="mt-2 flex gap-2">
               {[1,2,3].map((n) => {
@@ -366,17 +395,22 @@ export default function Ambiguous() {
                 );
               })}
             </div>
-            {/* 判定オーバーレイ（○×） */}
+            {/* 判定オーバーレイ（○×＋意味） */}
             {judgeMark && (
-              <div
-                className={`absolute inset-0 grid place-items-center pointer-events-none
-                  ${judgeMark === "ok" ? "bg-green-500/40" : "bg-red-500/40"}`}
-              >
-                <div
-                  className="text-[min(18vw,160px)] font-extrabold animate-scaleIn"
-                  style={{ color: "var(--foreground)" }}
-                >
-                  {judgeMark === "ok" ? "○" : "×"}
+              <div className="absolute inset-0 grid place-items-center pointer-events-none">
+                <div className="text-center">
+                  <div
+                    className="text-[min(18vw,160px)] font-extrabold animate-scaleIn leading-none"
+                    style={{ color: judgeMark === "ok" ? "var(--primary)" : "var(--accent)" }}
+                  >
+                    {judgeMark === "ok" ? "○" : "×"}
+                  </div>
+                  {current && (
+                    <div className="mt-2 text-xl md:text-2xl font-semibold"
+                         style={{ color: "var(--foreground)" }}>
+                      {current.meanings?.[0] ?? ""}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -432,6 +466,7 @@ export default function Ambiguous() {
           </CardContent>
         </Card>
       </div>
+      )}
     </Container>
   );
 }
