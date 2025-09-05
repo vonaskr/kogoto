@@ -32,6 +32,12 @@ export default function Ambiguous() {
   const [judgeMark, setJudgeMark] = useState<"ok" | "ng" | null>(null); // ○ × オーバーレイ
   const lockRef = useRef(false); // 二重判定防止
 
+  // ==== スコア ====
+  const [correctCount, setCorrectCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [comboMax, setComboMax] = useState(0);
+
   const { start: startMetro, stop: stopMetro, isRunning } = useMetronome(90, (beat) => {
     // 4分音符ごと（=1拍）に呼ばれる
     beatsInPhaseRef.current += 1;
@@ -173,6 +179,19 @@ export default function Ambiguous() {
     setPhase("judge");
     beatsInPhaseRef.current = 0;
 
+    // スコア更新
+    setTotalCount((c) => c + 1);
+    if (correct) {
+      setCorrectCount((c) => c + 1);
+      setCombo((c) => {
+        const next = c + 1;
+        setComboMax((m) => Math.max(m, next));
+        return next;
+      });
+    } else {
+      setCombo(0);
+    }
+
     // セッション保存（最小1問単位）
     saveSession({
       id: `${Date.now()}`,
@@ -222,13 +241,27 @@ export default function Ambiguous() {
         {/* 出題カード */}
         <Card pressable={false}>
           <CardContent className="p-6 md:p-8 relative">
-            <div className="mb-4 flex items-center justify-between">
-              <h1 className="h1-fluid">曖昧クイズ</h1>
+             <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h1 className="h1-fluid">曖昧クイズ</h1>
+                <p className="text-sm opacity-70">
+                  {correctCount}/{totalCount} 正解　
+                  コンボ: {combo}（最高 {comboMax}）
+                </p>
+              </div>
               <div className="flex gap-2">
                 {!isRunning ? (
                   <Button onClick={startQuiz}>開始</Button>
                 ) : (
-                  <Button variant="surface" onClick={() => { stopMetro(); setPhase("idle"); }}>停止</Button>
+                  <Button
+                    variant="surface"
+                    onClick={() => {
+                      stopMetro();
+                      setPhase("idle");
+                    }}
+                  >
+                    停止
+                  </Button>
                 )}
               </div>
             </div>
