@@ -29,6 +29,23 @@ export default function RhythmResult() {
 
   // ② セッションはクライアント側で後から取得（初期は null で固定レンダリング）
   const [session, setSession] = useState<Session | null>(null);
+  // コンボに応じた紙吹雪（3以上で発火）
+  useEffect(() => {
+    if (comboMax < 3) return;
+    let stop = false;
+    (async () => {
+      const confetti = (await import("canvas-confetti")).default;
+      const power = comboMax >= 10 ? 1 : comboMax >= 6 ? 0.7 : 0.45;
+      if (stop) return;
+      // 中央 burst
+      confetti({ particleCount: Math.round(180 * power), spread: 70, origin: { y: 0.25 }, scalar: 1 + power * 0.4 });
+      // 左右から
+      confetti({ particleCount: Math.round(120 * power), angle: 60,  spread: 55, origin: { x: 0, y: 0.4 }, scalar: 0.9 + power * 0.3 });
+      confetti({ particleCount: Math.round(120 * power), angle: 120, spread: 55, origin: { x: 1, y: 0.4 }, scalar: 0.9 + power * 0.3 });
+    })();
+    return () => { stop = true; };
+  }, [comboMax]);
+
   useEffect(() => {
     // getLatestSession はクライアント専用想定
     const s = getLatestSession?.();
@@ -77,7 +94,19 @@ export default function RhythmResult() {
                       )
                     }
                   >
-                    <div className="text-sm opacity-70 mb-1">Q{i + 1}</div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-sm opacity-70">Q{i + 1}</div>
+                      <span
+                        className={
+                          "text-xs font-semibold px-2 py-0.5 rounded " +
+                          (it.correct
+                            ? "bg-[var(--primary)] text-[var(--background)]"
+                            : "bg-[var(--accent)] text-[var(--background)]")
+                        }
+                      >
+                        {it.correct ? "正解" : "不正解"}
+                      </span>
+                    </div>
                     <div className="font-semibold">「{it.word}」</div>
                     <div className="text-sm mt-1">
                       正解：<span className="font-medium">{it.correctText}</span>
