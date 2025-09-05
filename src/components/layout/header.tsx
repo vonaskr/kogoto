@@ -12,17 +12,17 @@ export function AppHeader({ className }: { className?: string }) {
         rounded-[var(--radius-lg)] shadow-[var(--shadow-press)] px-3 py-2">
         {/* Left: ロゴ */}
         <Link href="/" className="inline-flex items-center gap-2">
-          <span className="inline-grid place-items-center w-8 h-8
+          <span className="inline-grid place-items-center w-15 h-8
             rounded-[10px] border-4 border-[var(--border-strong)]
-            bg-[var(--accent)] shadow-[var(--shadow-strong)] font-black">N</span>
+            bg-[var(--accent)] shadow-[var(--shadow-press)] font-black">Home</span>
           <span className="font-extrabold tracking-tight">こごと / Kogoto</span>
         </Link>
 
         {/* Center: ピルナビ */}
         <nav className="hidden md:flex items-center gap-2">
           {[
-            { href: "/vocab", label: "単語" },
-            { href: "/rhythm", label: "リズム" },
+            { href: "/vocab", label: "単語リスト" },
+            { href: "/rhythm", label: "リズム学習" },
             { href: "/ambiguous", label: "曖昧クイズ" },
           ].map((i) => (
             <Link key={i.href}

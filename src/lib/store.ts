@@ -96,3 +96,26 @@ export function getSeenSet(): Set<number> {
   }
   return seen;
 }
+
+// 語ごとの統計（seen/correct/wrong/acc）
+export function getStatsMap(): Map<number, { seen: number; correct: number; wrong: number; acc: number }> {
+  const map = new Map<number, { seen: number; correct: number; wrong: number; acc: number }>();
+  for (const s of getAllSessions()) {
+    for (const it of s.items) {
+      const cur = map.get(it.vocabId) ?? { seen: 0, correct: 0, wrong: 0, acc: 0 };
+      cur.seen += 1;
+      if (it.correct) cur.correct += 1; else cur.wrong += 1;
+      map.set(it.vocabId, cur);
+    }
+  }
+  // acc（正答率）を後計算
+  for (const [id, v] of map) v.acc = v.seen > 0 ? v.correct / v.seen : 0;
+  return map;
+}
+
+// 学習記録をすべてクリア（未出題へ）
+export function clearAllProgress() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(SESSIONS_KEY);
+  localStorage.removeItem(WRONG_KEY);
+}

@@ -33,7 +33,7 @@
   --shadow-lift:     3px 3px 0 var(--border-strong);  /* ホバー時に少し強く */
   --shadow-pressed:  3px 3px 0 var(--border-strong);  /* 押下で短く */
    --shadow-press: 2px 2px 0 var(--border-strong);   /* 押したとき：影を小さくする */
-}
+} 
 
 /* --- あなたの“ポップ”テーマ（唯一の真実） -------------------- */
 :root {

@@ -5,19 +5,26 @@ import { Container } from "@/components/layout/container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { loadVocabCsv, type Vocab } from "@/lib/vocab";
-import { getLastOutcomeMap, getSeenSet, getWrongWeights } from "@/lib/store";
+import {
+  getLastOutcomeMap,
+  getSeenSet,
+  getWrongWeights,
+  getStatsMap,
+  clearAllProgress,
+} from "@/lib/store";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"; // 既存の shadcn Popover を想定
 
 type Filter = "all" | "unseen" | "review";
-
 type Status = "unseen" | "recentOk" | "review";
+type SortKey = "id" | "acc" | "correct" | "part";
 
-// 学習状態は「直近の結果のみ」で判定
-// - 未出題: seenにない
-// - 直近正解: last === true
-// - 復習対象: last === false
 function statusOf(
   v: Vocab,
-  maps: { wrong: Map<number, number>; last: Map<number, boolean>; seen: Set<number> }
+  maps: { last: Map<number, boolean>; seen: Set<number> }
 ): Status {
   if (!maps.seen.has(v.id)) return "unseen";
   const last = maps.last.get(v.id);
@@ -26,20 +33,38 @@ function statusOf(
   return "unseen";
 }
 
+function statusBg(st: Status) {
+  // テーマ変数のみで配色（color-mix）
+  if (st === "recentOk")
+    return "color-mix(in srgb, var(--primary) 24%, var(--background) 76%)";
+  if (st === "review")
+    return "color-mix(in srgb, var(--accent) 24%, var(--background) 76%)";
+  return "var(--background)";
+}
+function badgeBg(st: Status) {
+  if (st === "recentOk")
+    return "color-mix(in srgb, var(--primary) 36%, var(--background) 64%)";
+  if (st === "review")
+    return "color-mix(in srgb, var(--accent) 36%, var(--background) 64%)";
+  return "var(--card)";
+}
+
 export default function VocabListPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [all, setAll] = useState<Vocab[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("id"); // ④ ソートキー
 
-  // 学習記録の集計
+  // 学習記録（スナップショット）
   const maps = useMemo(() => {
     return {
-      wrong: getWrongWeights(),
       last: getLastOutcomeMap(),
       seen: getSeenSet(),
+      wrong: getWrongWeights(), // 使うのは review 抽出時のみ
+      stats: getStatsMap(), // ④ 正答率/回数のための集計
     };
-  }, []); // ページ入場時のスナップショットでOK
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -56,8 +81,15 @@ export default function VocabListPage() {
     })();
   }, []);
 
-  const list = useMemo(() => {
-    const enriched = all.map((v) => ({ v, st: statusOf(v, maps) }));
+  const enriched = useMemo(() => {
+    return all.map((v) => {
+      const st = statusOf(v, { last: maps.last, seen: maps.seen });
+      const s = maps.stats.get(v.id) ?? { seen: 0, correct: 0, wrong: 0, acc: 0 };
+      return { v, st, s };
+    });
+  }, [all, maps.last, maps.seen, maps.stats]);
+
+  const filtered = useMemo(() => {
     switch (filter) {
       case "unseen":
         return enriched.filter((x) => x.st === "unseen");
@@ -66,18 +98,43 @@ export default function VocabListPage() {
       default:
         return enriched;
     }
-  }, [all, maps, filter]);
+  }, [enriched, filter]);
+
+  const sorted = useMemo(() => {
+    const arr = filtered.slice();
+    arr.sort((a, b) => {
+      switch (sortKey) {
+        case "acc":
+          return (b.s.acc ?? 0) - (a.s.acc ?? 0);
+        case "correct":
+          return (b.s.correct ?? 0) - (a.s.correct ?? 0);
+        case "part":
+          return a.v.part.localeCompare(b.v.part) || a.v.id - b.v.id;
+        case "id":
+        default:
+          return a.v.id - b.v.id;
+      }
+    });
+    return arr;
+  }, [filtered, sortKey]);
+
+  const onReset = () => {
+    if (!confirm("学習記録をすべて未出題状態に戻します。よろしいですか？")) return;
+    clearAllProgress();
+    // 再読込（最新スナップショットにするため）
+    location.reload();
+  };
 
   return (
     <Container>
-      <Card>
+      {/* 外枠カードは押し込みを無効化 */}
+      <Card pressable={false}>
         <CardHeader className="pb-3">
           <CardTitle className="h1-fluid">単語リスト</CardTitle>
         </CardHeader>
         <CardContent className="p-6 md:p-8">
-
-          {/* フィルタ */}
-          <div className="mb-4 flex gap-2">
+          {/* フィルタ群 */}
+          <div className="mb-4 flex flex-wrap gap-2 items-center">
             <Button size="sm" variant={filter === "all" ? "primary" : "surface"} onClick={() => setFilter("all")}>
               すべて
             </Button>
@@ -87,6 +144,23 @@ export default function VocabListPage() {
             <Button size="sm" variant={filter === "review" ? "primary" : "surface"} onClick={() => setFilter("review")}>
               復習対象
             </Button>
+
+            {/* ④ ソート */}
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-sm opacity-70">並び替え</span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-2 py-1 text-sm"
+              >
+                <option value="id">ID順</option>
+                <option value="acc">正答率（高）</option>
+                <option value="correct">正解数（多）</option>
+                <option value="part">品詞</option>
+              </select>
+              {/* ③ リセット */}
+              <Button size="sm" variant="surface" onClick={onReset}>リセット</Button>
+            </div>
           </div>
 
           {loading && <div className="opacity-70">読み込み中…</div>}
@@ -94,41 +168,49 @@ export default function VocabListPage() {
 
           {!loading && !err && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {list.map(({ v, st }) => {
-                // 背景はテーマ変数のみを使用（color-mixでトーンを合わせる）
-                const bg =
-                  st === "recentOk"
-                    ? "color-mix(in srgb, var(--primary) 24%, var(--background) 76%)"
-                    : st === "review"
-                      ? "color-mix(in srgb, var(--accent) 24%, var(--background) 76%)"
-                      : "var(--background)";
-                const badgeBg =
-                  st === "recentOk"
-                    ? "color-mix(in srgb, var(--primary) 36%, var(--background) 64%)"
-                    : st === "review"
-                      ? "color-mix(in srgb, var(--accent) 36%, var(--background) 64%)"
-                      : "var(--card)";
-                return (
-                  <div
-                    key={v.id}
-                    className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] shadow-[var(--shadow-strong)] p-4"
-                    style={{ background: bg }}
+              {sorted.map(({ v, st, s }) => (
+                <Popover key={v.id}>
+                  <PopoverTrigger asChild>
+                    {/* 各単語カード：押し込みはここにだけ付与 */}
+                    <div
+                      className="pressable rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] shadow-[var(--shadow-strong)] p-4 cursor-pointer"
+                      style={{ background: statusBg(st) }}
+                      title="詳細を見る"
+                    >
+                      <div className="text-lg font-extrabold text-center leading-snug">{v.word}</div>
+                      <div className="text-sm opacity-80 text-center mt-1 break-words">
+                        {v.meanings[0] ?? ""}
+                      </div>
+                      <div className="mt-3 flex justify-center">
+                        <span
+                          className="inline-flex items-center rounded-full border-2 border-[var(--border-strong)] px-2 py-[2px] text-xs"
+                          style={{ background: badgeBg(st) }}
+                        >
+                          {st === "recentOk" ? "直近正解" : st === "review" ? "復習対象" : "未出題"}
+                        </span>
+                      </div>
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="center"
+                    className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] shadow-[var(--shadow-strong)] p-4 w-80"
                   >
-                    <div className="text-lg font-extrabold text-center leading-snug">{v.word}</div>
-                    <div className="text-sm opacity-80 text-center mt-1 break-words">
-                      {v.meanings[0] ?? ""}
+                    <div className="text-base font-bold mb-1">「{v.word}」</div>
+                    <div className="text-sm opacity-80">意味：{v.meanings.join(" / ")}</div>
+                    <div className="text-sm mt-2">
+                      正解数：<b>{s.correct}</b>　誤答数：<b>{s.wrong}</b>　出題：<b>{s.seen}</b>
                     </div>
-                    <div className="mt-3 flex justify-center">
-                      <span
-                        className="inline-flex items-center rounded-full border-2 border-[var(--border-strong)] px-2 py-[2px] text-xs"
-                        style={{ background: badgeBg }}
-                      >
-                        {st === "recentOk" ? "正解" : st === "review" ? "復習対象" : "未出題"}
-                      </span>
+                    <div className="text-sm">
+                      正答率：<b>{Math.round((s.acc ?? 0) * 100)}%</b>
                     </div>
-                  </div>
-                );
-              })}
+                    {v.hint && (
+                      <div className="text-sm mt-2">
+                        例：<span className="opacity-90">{v.hint}</span>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              ))}
             </div>
           )}
         </CardContent>
