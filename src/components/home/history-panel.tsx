@@ -7,11 +7,9 @@ import { useEffect, useMemo, useState } from "react";
 import { getAllSessions, getSeenSet } from "@/lib/store";
 import { loadVocabCsv } from "@/lib/vocab";
 export function HistoryPanel() {
-    const [totalCount, setTotalCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [learnedCount, setLearnedCount] = useState(0); // = 一度でも出題された語数
   const [streakDays, setStreakDays] = useState(0);
-  // TODO: 学習時間の定義が決まり次第、算出ロジックを実装
-  const [studyMinutes] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -58,8 +56,7 @@ export function HistoryPanel() {
         <CardTitle>学習履歴</CardTitle>
       </CardHeader>
       <CardContent className="p-6 md:p-8 pt-4">
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <Stat label="学習時間" value={studyMinutes != null ? `${studyMinutes}分` : "—"} />
+        <div className="grid grid-cols-2 gap-3 mb-4">
           <Stat label="習得語数" value={`${learnedCount}/${totalCount || "—"}`} />
           <Stat label="連続日数" value={`${streakDays}日`} />
         </div>
