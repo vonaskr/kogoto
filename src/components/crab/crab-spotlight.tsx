@@ -11,11 +11,12 @@ import {
   Fit,
   Alignment,
 } from "@rive-app/react-canvas";
-import { getPoints, getCrabState, feedCrab, getCrabLevelStep } from "@/lib/store";
+import { getPoints, getCrabState, feedCrab, getCrabLevelStep, getLatestSession } from "@/lib/store";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RotateCw } from "lucide-react";
 import { loadVocabCsv } from "@/lib/vocab"; //
-import { CRAB_QUIPS , Quip} from "@/lib/crab-quips";
+import { CRAB_QUIPS, Quip } from "@/lib/crab-quips";
+import { getWeatherTag, type WeatherTag } from "@/lib/weather";
 
 // Rive Editor と完全一致させる
 const ARTBOARD = "Crab";
@@ -30,14 +31,15 @@ export function CrabSpotlight() {
   const [level, setLevel] = useState(1);
   const [quipIndex, setQuipIndex] = useState(0);
   const [meaningsMap, setMeaningsMap] = useState<Record<string, string[]> | null>(null);
+  const [lastWrongWord, setLastWrongWord] = useState<string | null>(null);
+  const [pinnedQuip, setPinnedQuip] = useState<string | null>(null); // レベルアップ直後の専用一言など
+  const [weatherTag, setWeatherTag] = useState<WeatherTag | null>(null);
 
   const step = getCrabLevelStep(level);
   const affPct = step > 0 ? Math.round((affinity * 10000) / step) / 100 : 0;
   const remainingPts = Math.max(0, step - affinity);
-  // （簡易）天気タグは後で実装。今は null 扱い。
-  const weatherTag: "sunny" | "rainy" | "cloudy" | null = null;
-
-  // 条件に合う候補だけ抽出
+  
+  // 条件に合う候補だけ抽出（0件なら全体フォールバック）
   const quipCandidates = useMemo(() => {
     const ok = (q: Quip) => {
       const w = q.when;
@@ -48,13 +50,8 @@ export function CrabSpotlight() {
       return true;
     };
     const list = CRAB_QUIPS.filter(ok);
-    return list.length ? list : CRAB_QUIPS; // 0件は全体フォールバック
+    return list.length ? list : CRAB_QUIPS;
   }, [level, remainingPts, weatherTag]);
-
-  // 条件が変わったら候補内の先頭にリセット（好みでランダムでもOK）
-  useEffect(() => { setQuipIndex(0); }, [quipCandidates.length]);
-
-  const showQuip = quipCandidates[quipIndex % quipCandidates.length]?.text ?? "";
   const feedItems = useMemo(
     () => [
       { id: "a", name: "えび",   emoji: "🦐", cost: 10, gain: 10 },
@@ -64,6 +61,28 @@ export function CrabSpotlight() {
     []
   );
   
+  // 動的（直前ミス引用）… vocab に無い場合でもそのまま表示
+  const dynamicQuips: string[] = useMemo(() => {
+    const arr: string[] = [];
+    if (lastWrongWord) {
+      arr.push(`さっき間違えちゃった，${lastWrongWord} 覚えた〜？`);
+    }
+    if (pinnedQuip) {
+      // pinned は最優先で先頭表示
+      arr.unshift(pinnedQuip);
+    }
+    return arr;
+  }, [lastWrongWord, pinnedQuip]);
+
+  // 表示テキスト（優先: pinned → 動的 → 静的候補）
+  const allTexts = [
+    ...dynamicQuips,
+    ...quipCandidates.map(q => q.text),
+  ];
+  const showQuip = allTexts.length ? allTexts[quipIndex % allTexts.length] : "";
+ 
+  // 候補が変わったら index リセット（pinned 消滅や条件変動に追随）
+  useEffect(() => { setQuipIndex(0); }, [allTexts.length]);
   // /app/test と同条件：react-canvas + artboard + stateMachines + layout
   const { rive, RiveComponent } = useRive({
     src: "/crab.riv", 
@@ -90,6 +109,17 @@ export function CrabSpotlight() {
     setAffinity(crab.affinity);
   }, []);
 
+  // 天気を取得（失敗したら null のまま）
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const tag = await getWeatherTag();
+      if (!alive) return;
+      setWeatherTag(tag); // "sunny" | "cloudy" | "rainy" | null
+    })();
+    return () => { alive = false; };
+  }, []);
+
   // vocab.csv 読み込み → { 単語 or 読み: meanings[] } の簡易マップ
   useEffect(() => {
     (async () => {
@@ -106,11 +136,23 @@ export function CrabSpotlight() {
       }
     })();
   }, []);
+
+  // 直前に間違えた単語を取得（最新セッションの末尾から逆走査）
+  useEffect(() => {
+    const s = getLatestSession();
+    if (!s) { setLastWrongWord(null); return; }
+    for (let i = s.items.length - 1; i >= 0; i--) {
+      const it = s.items[i];
+      if (!it.correct) { setLastWrongWord(it.word); return; }
+    }
+    setLastWrongWord(null);
+  }, []);
+
   // ご飯処理：ポイント消費→友好加算→UI更新
     const handleFeed = (cost: number, gain: number) => {
     if (points < cost) return;
-    // gain は絶対pt
-    const ok = feedCrab(cost, gain);
+    const beforeLevel = level;
+    const ok = feedCrab(cost, gain); // gain は絶対pt
     if (!ok) return;
     const p = getPoints();
     const crab = getCrabState();
@@ -118,6 +160,10 @@ export function CrabSpotlight() {
     setLevel(crab.level);
     setAffinity(crab.affinity);
     fireCorrect();
+    // レベルアップ検知 → 専用一言をピン留め
+    if (crab.level > beforeLevel) {
+      setPinnedQuip("また一段と賢くなっちゃった〜，この調子だね");
+    }
   };
 
   // デバッグ：Inputs が本当に見えているかを一度だけログ
@@ -168,10 +214,14 @@ export function CrabSpotlight() {
 
         {/* 下段：モード別ビュー（最小実装） */}
         {mode === "talk" ? (
-          <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none">
-            {/* 小言テキスト：<k>古語</k> を下線＆クリックで意味Popover */}
-              <p className="text-sm opacity-90 leading-relaxed font-game">
-                {showQuip.split(/(<k>.*?<\/k>)/).map((chunk, i) => {                const m = /^<k>(.*?)<\/k>$/.exec(chunk);
+            <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none">
+    {/* 見出し */}
+    <div className="mb-2 text-xs opacity-70">カニからの小言</div>
+
+    {/* 小言テキスト：<k>古語</k> を下線＆クリックで意味Popover */}
+    <p className="text-sm opacity-90 leading-relaxed font-game">
+                {showQuip.split(/(<k>.*?<\/k>)/).map((chunk, i) => {                
+                  const m = /^<k>(.*?)<\/k>$/.exec(chunk);
                 if (!m) return <span key={i}>{chunk}</span>;
                 const word = m[1];
                 return (
@@ -201,7 +251,11 @@ export function CrabSpotlight() {
               <button
                 type="button"
                 aria-label="小言を切り替える"
-                onClick={() => setQuipIndex((i) => (i + 1) % quipCandidates.length)}
+                  onClick={() => {
+                  // pinned があれば一度だけ消してから通常候補へ
+                  if (pinnedQuip) setPinnedQuip(null);
+                  setQuipIndex((i) => (i + 1) % Math.max(1, allTexts.length));
+                }}
                 className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-4 py-2 shadow-[var(--shadow-strong)] hover:translate-y-[1px] transition text-sm
                            bg-[var(--primary)] text-[var(--primary-foreground)]"
               >
