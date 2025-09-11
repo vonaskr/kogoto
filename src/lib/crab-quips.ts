@@ -22,8 +22,9 @@ export const CRAB_QUIPS: Quip[] = [
   // 古語入り（サンプル）
   { id: "q9",  text: "学ぶは楽しきかな、<k>をさをさ</k>見逃すな。", when: { minLevel: 3 } },
   { id: "q10", text: "今日の気持ちは、<k>いと</k>よし！" },
-  { id: "q13", text: "みんなから<k>ののしられ</k>たいよ～！" },
+  { id: "q14", text: "みんなから<k>ののしられ</k>たいよ～！" },
   // 天気（後でAPI連携）
   { id: "q11", text: "カニ，雨の日すきなんだぁ～", when: { weatherTag: "rainy" } },
   { id: "q12", text: "晴れてる日の砂浜，きもちいいよね", when: { weatherTag: "sunny" } },
+  { id: "q13", text: "曇りの日は<k>ひねもす</k>お家であそんでようかなぁ", when: { weatherTag: "cloudy" } },
 ];

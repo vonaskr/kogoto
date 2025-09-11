@@ -36,6 +36,8 @@ export function CrabSpotlight() {
   const [lastWrongWord, setLastWrongWord] = useState<string | null>(null);
   const [pinnedQuip, setPinnedQuip] = useState<string | null>(null); // レベルアップ直後の専用一言など
   const [weatherTag, setWeatherTag] = useState<WeatherTag | null>(null);
+  // デバッグ表示フラグ（本番では環境変数を外せば非表示）
+  const DEBUG_WEATHER = process.env.NEXT_PUBLIC_DEBUG_WEATHER === "1";
 
   const step = getCrabLevelStep(level);
   const affPct = step > 0 ? Math.round((affinity * 10000) / step) / 100 : 0;
@@ -251,9 +253,17 @@ export function CrabSpotlight() {
 
         {/* 下段：モード別ビュー（最小実装） */}
         {mode === "talk" ? (
-            <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none">
-    {/* 見出し */}
-    <div className="mb-2 text-xs opacity-70">カニからの小言</div>
+          <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none">
+            {/* 見出し */}
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-xs opacity-70">カニからの小言</div>
+              {/* 天気デバッグ用表示 プロジェクト直下.env.local. const DEBUG_WEATHER を外せば非表示*/}
+              {DEBUG_WEATHER && (
+                <span className="inline-flex items-center gap-1 rounded-full border-2 border-[var(--border-強)] px-2 py-[2px] bg-[var(--card)] text-[10px]">
+                  天気: <strong>{weatherTag ?? "—"}</strong>
+                </span>
+              )}
+            </div>
 
     {/* 小言テキスト：<k>古語</k> を下線＆クリックで意味Popover */}
     <p className="text-sm opacity-90 leading-relaxed font-game">
