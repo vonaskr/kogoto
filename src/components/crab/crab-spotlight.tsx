@@ -15,7 +15,7 @@ import { getPoints, getCrabState, feedCrab, getCrabLevelStep } from "@/lib/store
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RotateCw } from "lucide-react";
 import { loadVocabCsv } from "@/lib/vocab"; //
-import { CRAB_QUIPS } from "@/lib/crab-quips";
+import { CRAB_QUIPS , Quip} from "@/lib/crab-quips";
 
 // Rive Editor と完全一致させる
 const ARTBOARD = "Crab";
@@ -34,7 +34,28 @@ export function CrabSpotlight() {
   const step = getCrabLevelStep(level);
   const affPct = step > 0 ? Math.round((affinity * 10000) / step) / 100 : 0;
   const remainingPts = Math.max(0, step - affinity);
-    const feedItems = useMemo(
+  // （簡易）天気タグは後で実装。今は null 扱い。
+  const weatherTag: "sunny" | "rainy" | "cloudy" | null = null;
+
+  // 条件に合う候補だけ抽出
+  const quipCandidates = useMemo(() => {
+    const ok = (q: Quip) => {
+      const w = q.when;
+      if (!w) return true;
+      if (w.minLevel != null && level < w.minLevel) return false;
+      if (w.maxRemainPts != null && remainingPts > w.maxRemainPts) return false;
+      if (w.weatherTag && w.weatherTag !== weatherTag) return false;
+      return true;
+    };
+    const list = CRAB_QUIPS.filter(ok);
+    return list.length ? list : CRAB_QUIPS; // 0件は全体フォールバック
+  }, [level, remainingPts, weatherTag]);
+
+  // 条件が変わったら候補内の先頭にリセット（好みでランダムでもOK）
+  useEffect(() => { setQuipIndex(0); }, [quipCandidates.length]);
+
+  const showQuip = quipCandidates[quipIndex % quipCandidates.length]?.text ?? "";
+  const feedItems = useMemo(
     () => [
       { id: "a", name: "えび",   emoji: "🦐", cost: 10, gain: 10 },
       { id: "b", name: "ホタテ", emoji: "🦪", cost: 18, gain: 18 },
@@ -149,9 +170,8 @@ export function CrabSpotlight() {
         {mode === "talk" ? (
           <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none">
             {/* 小言テキスト：<k>古語</k> を下線＆クリックで意味Popover */}
-            <p className="text-sm opacity-90 leading-relaxed">
-              {CRAB_QUIPS[quipIndex].text.split(/(<k>.*?<\/k>)/).map((chunk, i) => {
-                const m = /^<k>(.*?)<\/k>$/.exec(chunk);
+              <p className="text-sm opacity-90 leading-relaxed font-game">
+                {showQuip.split(/(<k>.*?<\/k>)/).map((chunk, i) => {                const m = /^<k>(.*?)<\/k>$/.exec(chunk);
                 if (!m) return <span key={i}>{chunk}</span>;
                 const word = m[1];
                 return (
@@ -181,7 +201,7 @@ export function CrabSpotlight() {
               <button
                 type="button"
                 aria-label="小言を切り替える"
-                onClick={() => setQuipIndex((i) => (i + 1) % CRAB_QUIPS.length)}
+                onClick={() => setQuipIndex((i) => (i + 1) % quipCandidates.length)}
                 className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-4 py-2 shadow-[var(--shadow-strong)] hover:translate-y-[1px] transition text-sm
                            bg-[var(--primary)] text-[var(--primary-foreground)]"
               >
