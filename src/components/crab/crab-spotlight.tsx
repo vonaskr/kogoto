@@ -30,6 +30,7 @@ export function CrabSpotlight() {
   const [affinity, setAffinity] = useState(0); // 0..1
   const [level, setLevel] = useState(1);
   const [quipIndex, setQuipIndex] = useState(0);
+  const [prevQuipKey, setPrevQuipKey] = useState<string | null>(null); 
   const [meaningsMap, setMeaningsMap] = useState<Record<string, string[]> | null>(null);
   const [lastWrongWord, setLastWrongWord] = useState<string | null>(null);
   const [pinnedQuip, setPinnedQuip] = useState<string | null>(null); // レベルアップ直後の専用一言など
@@ -76,14 +77,47 @@ export function CrabSpotlight() {
   }, [lastWrongWord, pinnedQuip]);
 
   // 表示テキスト（優先: pinned → 動的 → 静的候補）
-  const allTexts = [
-    ...dynamicQuips,
-    ...quipCandidates.map(q => q.text),
-  ];
-  const showQuip = allTexts.length ? allTexts[quipIndex % allTexts.length] : "";
+   const allTexts = [
+   ...dynamicQuips.map(t => `dyn:${t}`),
+   ...quipCandidates.map(q => `stc:${q.id}`),   // 静的は id ベースのキーに
+    ];
+   const renderText = (key: string) =>
+   key.startsWith("dyn:") ? key.slice(4) : (quipCandidates.find(q => `stc:${q.id}` === key)?.text ?? "");
+
+  const showQuip = allTexts.length ? renderText(allTexts[quipIndex % allTexts.length]) : "";
  
+  // 直前に表示していた小言キーを復元（初回のみ）
+  useEffect(() => {
+    const saved = localStorage.getItem("kogoto:lastQuipKey");
+    if (!saved || !allTexts.length) return;
+    const idx = allTexts.indexOf(saved);
+    if (idx >= 0) setQuipIndex(idx);
+    setPrevQuipKey(saved);
+    // 以後は通常ローテーション
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTexts.length]);
+
+  // 現在表示中の小言キーを保存（毎回）
+  useEffect(() => {
+    if (!allTexts.length) return;
+    const key = allTexts[quipIndex % allTexts.length];
+    if (key) {
+      localStorage.setItem("kogoto:lastQuipKey", key);
+      setPrevQuipKey(key);
+    }
+  }, [quipIndex, allTexts.length]);
+
   // 候補が変わったら index リセット（pinned 消滅や条件変動に追随）
-  useEffect(() => { setQuipIndex(0); }, [allTexts.length]);
+  useEffect(() => {
+  if (!allTexts.length) return;
+  // 直前キーと違うものに寄せる（同一だったら +1）
+  const curKey = allTexts[quipIndex % allTexts.length] ?? null;
+  if (prevQuipKey && curKey === prevQuipKey) {
+    setQuipIndex(i => (i + 1) % allTexts.length);
+  }
+  // 何もしない = できる限り位置維持
+  }, [allTexts.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // /app/test と同条件：react-canvas + artboard + stateMachines + layout
   const { rive, RiveComponent } = useRive({
     src: "/crab.riv", 
@@ -253,11 +287,20 @@ export function CrabSpotlight() {
               <button
                 type="button"
                 aria-label="小言を切り替える"
-                  onClick={() => {
-                  // pinned があれば一度だけ消してから通常候補へ
-                  if (pinnedQuip) setPinnedQuip(null);
-                  setQuipIndex((i) => (i + 1) % Math.max(1, allTexts.length));
-                }}
+                   onClick={() => {
+                    if (pinnedQuip) setPinnedQuip(null);
+                    if (allTexts.length <= 1) return;
+                    // 現在キーと違うものに必ず切替（+1 基本、もし同一になり得るときは +2）
+                    setQuipIndex(i => {
+                      const next = (i + 1) % allTexts.length;
+                      const curKey = allTexts[i % allTexts.length];
+                      const nxtKey = allTexts[next];
+                      return (nxtKey === curKey && allTexts.length > 2) ? (i + 2) % allTexts.length : next;
+                    });
+                    // 新しいキーを保存
+                    const nextKey = allTexts[(quipIndex + 1) % allTexts.length];
+                    setPrevQuipKey(nextKey);
+                  }}
                 className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-4 py-2 shadow-[var(--shadow-strong)] hover:translate-y-[1px] transition text-sm
                            bg-[var(--primary)] text-[var(--primary-foreground)]"
               >

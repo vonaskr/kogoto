@@ -21,7 +21,17 @@ export const metadata: Metadata = {
 // ...imports は現状のまま
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ja">
+      <html lang="ja">
+      <head>
+        {/* game font を先読み（public/fonts/JF-Dot-Ayu18.ttf を自前ホスト） */}
+        <link
+          rel="preload"
+          href="/fonts/JF-Dot-Ayu18.ttf"
+          as="font"
+          type="font/ttf"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-screen bg-[var(--background)] text-[var(--foreground)] antialiased">
         {/* 背景専用*/}
         <div className="min-h-screen  grid-bg">
