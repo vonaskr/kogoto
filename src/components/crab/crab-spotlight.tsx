@@ -65,7 +65,8 @@ export function CrabSpotlight() {
   const dynamicQuips: string[] = useMemo(() => {
     const arr: string[] = [];
     if (lastWrongWord) {
-      arr.push(`さっき間違えちゃった，${lastWrongWord} 覚えた〜？`);
+    // 古語を <k>…</k> で囲み、下線＋意味ポップオーバー対応
+      arr.push(`さっき間違えちゃった，<k>${lastWrongWord}</k> 覚えた〜？`);
     }
     if (pinnedQuip) {
       // pinned は最優先で先頭表示
