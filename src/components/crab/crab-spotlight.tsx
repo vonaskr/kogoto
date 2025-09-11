@@ -207,11 +207,12 @@ export function CrabSpotlight() {
           <RiveComponent className="w-full h-full" />
         </div>
 
-        {/* デバッグ操作（必要に応じて残す/隠す） */}
+        {/* rive action デバッグ 
         <div className="mt-3 flex flex-wrap gap-2 items-center justify-center">
           <Button size="sm" onClick={fireCorrect} disabled={!onCorrect}>正解トリガ</Button>
           <Button size="sm" variant="surface" onClick={fireWrong} disabled={!onWrong}>誤答トリガ</Button>
         </div>
+        */}
 
         {/* 下段：モード別ビュー（最小実装） */}
         {mode === "talk" ? (

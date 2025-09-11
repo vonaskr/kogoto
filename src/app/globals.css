@@ -124,3 +124,17 @@
   animation: scaleIn 0.6s ease-out forwards;
 }
 
+/* --- Game font: JF Dot Ayu 18 (self-hosted) --- */
+@font-face{
+  font-family: "JF Dot Ayu 18";
+  src: url("/fonts/JF-Dot-Ayu18.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap; /* デプロイ時もFOUT防止しつつ読み込み */
+}
+
+/* 小言だけピクセル調の雰囲気に */
+.font-game{
+  font-family: "JF Dot Ayu 18", ui-sans-serif, system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Segoe UI", Arial, sans-serif;
+  letter-spacing: 0.01em; /* 読みやすさ微調整（好みで） */
+}
