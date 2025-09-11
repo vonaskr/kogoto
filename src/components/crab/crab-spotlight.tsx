@@ -12,6 +12,9 @@ import {
   Alignment,
 } from "@rive-app/react-canvas";
 import { getPoints, getCrabState, feedCrab, getCrabLevelStep } from "@/lib/store";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RotateCw } from "lucide-react";
+import { loadVocabCsv } from "@/lib/vocab"; //
 import { CRAB_QUIPS } from "@/lib/crab-quips";
 
 // Rive Editor と完全一致させる
@@ -26,6 +29,8 @@ export function CrabSpotlight() {
   const [affinity, setAffinity] = useState(0); // 0..1
   const [level, setLevel] = useState(1);
   const [quipIndex, setQuipIndex] = useState(0);
+  const [meaningsMap, setMeaningsMap] = useState<Record<string, string[]> | null>(null);
+
   const step = getCrabLevelStep(level);
   const affPct = step > 0 ? Math.round((affinity * 10000) / step) / 100 : 0;
   const remainingPts = Math.max(0, step - affinity);
@@ -64,6 +69,22 @@ export function CrabSpotlight() {
     setAffinity(crab.affinity);
   }, []);
 
+  // vocab.csv 読み込み → { 単語 or 読み: meanings[] } の簡易マップ
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await loadVocabCsv("/vocab.csv");
+        const map: Record<string, string[]> = {};
+        for (const v of list) {
+          map[v.word] = v.meanings;
+          if (v.reading) map[v.reading] = v.meanings;
+        }
+        setMeaningsMap(map);
+      } catch {
+        setMeaningsMap({});
+      }
+    })();
+  }, []);
   // ご飯処理：ポイント消費→友好加算→UI更新
     const handleFeed = (cost: number, gain: number) => {
     if (points < cost) return;
@@ -118,7 +139,7 @@ export function CrabSpotlight() {
           <RiveComponent className="w-full h-full" />
         </div>
 
-                {/* デバッグ操作（必要に応じて残す/隠す） */}
+        {/* デバッグ操作（必要に応じて残す/隠す） */}
         <div className="mt-3 flex flex-wrap gap-2 items-center justify-center">
           <Button size="sm" onClick={fireCorrect} disabled={!onCorrect}>正解トリガ</Button>
           <Button size="sm" variant="surface" onClick={fireWrong} disabled={!onWrong}>誤答トリガ</Button>
@@ -126,14 +147,48 @@ export function CrabSpotlight() {
 
         {/* 下段：モード別ビュー（最小実装） */}
         {mode === "talk" ? (
-          <div
-            role="button"
-            aria-label="次の小言"
-            onClick={() => setQuipIndex((i) => (i + 1) % CRAB_QUIPS.length)}
-            className="mt-4 cursor-pointer rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none"
-          >
-            <p className="text-sm opacity-90">{CRAB_QUIPS[quipIndex].text}</p>
-            <div className="text-xs opacity-60">(タップで切り替え)</div>
+          <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none">
+            {/* 小言テキスト：<k>古語</k> を下線＆クリックで意味Popover */}
+            <p className="text-sm opacity-90 leading-relaxed">
+              {CRAB_QUIPS[quipIndex].text.split(/(<k>.*?<\/k>)/).map((chunk, i) => {
+                const m = /^<k>(.*?)<\/k>$/.exec(chunk);
+                if (!m) return <span key={i}>{chunk}</span>;
+                const word = m[1];
+                return (
+                  <Popover key={i}>
+                    <PopoverTrigger
+                      asChild
+                      onClick={(e) => e.stopPropagation()} // 親への伝播防止
+                    >
+                      <span className="underline underline-offset-2 decoration-[var(--border-strong)] cursor-pointer">
+                        {word}
+                      </span>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-3 text-sm max-w-xs border-4 border-[var(--border-strong)] bg-[var(--card)] shadow-[var(--shadow-strong)]">
+                      <div className="font-semibold mb-1">{word}</div>
+                      <div className="opacity-80">
+                        {meaningsMap
+                          ? (meaningsMap[word] || ["（見つかりませんでした）"]).join(" / ")
+                          : "読み込み中…"}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                );
+              })}
+            </p>
+            {/* 右上：切替ボタン（RotateCw + ラベル） */}
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                aria-label="小言を切り替える"
+                onClick={() => setQuipIndex((i) => (i + 1) % CRAB_QUIPS.length)}
+                className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-4 py-2 shadow-[var(--shadow-strong)] hover:translate-y-[1px] transition text-sm
+                           bg-[var(--primary)] text-[var(--primary-foreground)]"
+              >
+                <RotateCw className="w-4 h-4" />
+                切替
+              </button>
+            </div>
           </div>
         ) : (
           <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-4">
