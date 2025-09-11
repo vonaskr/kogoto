@@ -123,9 +123,20 @@ export function clearAllProgress() {
 // ====== ポイント／カニ友好 ======
 const POINTS_KEY = "kogoto:points";
 const CRAB_KEY   = "kogoto:crab"; // { level:number, affinity:number(0..CRAB_LEVEL_STEP-1) }
-const CRAB_LEVEL_STEP = 50; // ← レベルアップしやすい設定（元:100）
-export function getCrabLevelStep(){ return CRAB_LEVEL_STEP; }
-type CrabState = { level: number; affinity: number };
+//Lv1→2:15, Lv2→3:20, Lv3→4:25, 以降 +8/level（Lv4→5:33, Lv5→6:41, ...）
+export function levelStep(level: number): number {
+  if (level <= 1) return 15;           // Lv1→2
+  if (level === 2) return 20;          // Lv2→3
+  if (level === 3) return 25;          // Lv3→4
+  // 4以降は逓増（やや緩やかに）
+  return 25 + 8 * (level - 3);        
+}
+// 呼び出し側は必ず level を明示
+export function getCrabLevelStep(level: number){ 
+  return levelStep(level); 
+}
+type CrabState = { level: number; affinity: number }; // affinity: 現在レベル内での蓄積量
+ 
 
 function readNumber(key: string, fallback = 0) {
   const v = Number(localStorage.getItem(key));
@@ -157,18 +168,33 @@ export function spendPoints(cost: number): boolean {
 }
 export function getCrabState(): CrabState {
   const s = readCrab();
+  const level = s.level || 1;
+  const step = levelStep(level); // 相互参照回避
   const aff = Math.max(0, Math.floor(s.affinity || 0));
-  // 旧データ(0..100想定)も安全に収める
-  const capped = aff % CRAB_LEVEL_STEP;
-  return { level: (s.level || 1), affinity: capped };
+  // 旧データに対しても現在レベルの step 範囲に丸める
+  const capped = Math.min(aff, Math.max(0, step - 1));
+  return { level, affinity: capped };
 }
 // ご飯を与える：ポイント消費→友好加算。閾値(100)でレベルアップ＆余剰ロールオーバー
 export function feedCrab(cost: number, affinityGain: number): boolean {
   if (!spendPoints(cost)) return false;
   const s = getCrabState();
-    let a = s.affinity + Math.max(0, Math.floor(affinityGain));
   let lv = s.level;
-  while (a >= CRAB_LEVEL_STEP) { a -= CRAB_LEVEL_STEP; lv += 1; }
+  let a  = s.affinity + Math.max(0, Math.floor(affinityGain));
+  // 可変ステップに対応：レベルが上がるたびに step を再評価
+  while (true) {
+    const step = levelStep(lv);
+    if (a < step) break;
+    a -= step;
+    lv += 1;
+  }
   writeCrab({ level: lv, affinity: a });
   return true;
+}
+
+// 表示用ヘルパ：現在レベルの進捗％
+export function getCrabProgressPct(): number {
+  const { level, affinity } = getCrabState();
+  const step = getCrabLevelStep(level);
+  return step > 0 ? Math.round((affinity / step) * 10000) / 100 : 0;
 }

@@ -24,20 +24,21 @@ export function CrabSpotlight() {
   const [points, setPoints] = useState(0);
   const [affinity, setAffinity] = useState(0); // 0..1
   const [level, setLevel] = useState(1);
-  const step = getCrabLevelStep();
-  const affPct = Math.round((affinity * 10000) / step) / 100; 
-  const feedItems = useMemo(
+  const step = getCrabLevelStep(level);
+  const affPct = step > 0 ? Math.round((affinity * 10000) / step) / 100 : 0;
+  const remainingPts = Math.max(0, step - affinity);
+    const feedItems = useMemo(
     () => [
-      { id: "a", name: "えび",   emoji: "🦐", cost: 10, exp: 0.06 },
-      { id: "b", name: "ホタテ", emoji: "🦪", cost: 18, exp: 0.10 },
-      { id: "c", name: "カニかま", emoji: "🦀", cost: 6, exp: 0.035 },
+      { id: "a", name: "えび",   emoji: "🦐", cost: 10, gain: 10 },
+      { id: "b", name: "ホタテ", emoji: "🦪", cost: 18, gain: 18 },
+      { id: "c", name: "カニかま", emoji: "🦀", cost: 6,  gain: 6  },
     ],
     []
-  );  
+  );
   
   // /app/test と同条件：react-canvas + artboard + stateMachines + layout
   const { rive, RiveComponent } = useRive({
-    src: "/crab.riv", // ← ここは絶対パス。http://localhost:3000/crab.riv で200確認済
+    src: "/crab.riv", 
     artboard: ARTBOARD,
     stateMachines: STATE_MACHINE,
     autoplay: true,
@@ -58,20 +59,20 @@ export function CrabSpotlight() {
     const crab = getCrabState();
     setPoints(p);
     setLevel(crab.level);
-    setAffinity((crab.affinity ?? 0) / 100); // 0..1 に正規化
+    setAffinity(crab.affinity);
   }, []);
 
   // ご飯処理：ポイント消費→友好加算→UI更新
-  const handleFeed = (cost: number, exp: number) => {
+    const handleFeed = (cost: number, gain: number) => {
     if (points < cost) return;
-    // exp は 0..1 の割合で来る → ％ポイントへ
-    const ok = feedCrab(cost, Math.round(exp * step));
+    // gain は絶対pt
+    const ok = feedCrab(cost, gain);
     if (!ok) return;
     const p = getPoints();
     const crab = getCrabState();
     setPoints(p);
     setLevel(crab.level);
-    setAffinity((crab.affinity ?? 0) / 100);
+    setAffinity(crab.affinity);
     fireCorrect();
   };
 
@@ -152,29 +153,28 @@ export function CrabSpotlight() {
                   role="progressbar"
                 />
               </div>
-              <div className="mt-1 text-xs opacity-70">次のレベルまで：{Math.max(0, 100 - affPct)}%</div>
+              <div className="mt-1 text-xs opacity-70">
+                次のレベルまで：{remainingPts}pt
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {feedItems.map((f) => (
                 <button
                   key={f.id}
-                  onClick={() => handleFeed(f.cost, f.exp)}
+                  onClick={() => handleFeed(f.cost, f.gain)}
                   className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] shadow-[var(--shadow-strong)] p-3 text-center hover:scale-[0.99] transition disabled:opacity-60"
                   disabled={points < f.cost}
                 >
                   <div className="text-2xl">{f.emoji}</div>
                   <div className="text-sm font-semibold mt-1">{f.name}</div>
-                  <div className="text-xs opacity-70 mt-1">- {f.cost}pt / {Math.round(f.exp*100)}%</div>
+                  <div className="text-xs opacity-70 mt-1">- {f.cost}pt / +{f.gain}pt</div>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* ちょいデバッグ */}
-        <div className="mt-2 text-xs opacity-60 text-center">
-          <code>inputs:{String(Boolean(onCorrect))}/{String(Boolean(onWrong))}</code>
-        </div>
+
 
       </CardContent>
     </Card>
