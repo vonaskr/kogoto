@@ -12,6 +12,7 @@ import {
   Alignment,
 } from "@rive-app/react-canvas";
 import { getPoints, getCrabState, feedCrab, getCrabLevelStep } from "@/lib/store";
+import { CRAB_QUIPS } from "@/lib/crab-quips";
 
 // Rive Editor と完全一致させる
 const ARTBOARD = "Crab";
@@ -23,7 +24,7 @@ export function CrabSpotlight() {
   const [mode, setMode] = useState<"talk" | "feed">("talk");
   const [points, setPoints] = useState(0);
   const [affinity, setAffinity] = useState(0); // 0..1
-  const [level, setLevel] = useState(1);
+  const [quipIndex, setQuipIndex] = useState(0);
   const step = getCrabLevelStep(level);
   const affPct = step > 0 ? Math.round((affinity * 10000) / step) / 100 : 0;
   const remainingPts = Math.max(0, step - affinity);
@@ -124,23 +125,26 @@ export function CrabSpotlight() {
 
         {/* 下段：モード別ビュー（最小実装） */}
         {mode === "talk" ? (
-          <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3">
-            <p className="text-sm opacity-90">カニ「今日もコツコツ〜」</p>
-            <div className="text-xs opacity-60">（タップで次の小言…は後で）</div>
+          <div
+            role="button"
+            aria-label="次の小言"
+            onClick={() => setQuipIndex((i) => (i + 1) % CRAB_QUIPS.length)}
+            className="mt-4 cursor-pointer rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none"
+          >
+            <p className="text-sm opacity-90">{CRAB_QUIPS[quipIndex].text}</p>
+            <div className="text-xs opacity-60">(タップで切り替え)</div>
           </div>
         ) : (
           <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-4">
-            <div className="mb-3 flex flex-wrap gap-2 items-center">
-              <span className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-3 py-1 bg-[var(--card)] text-sm">
-                Pt: <strong>{points}</strong>
-              </span>
-              <span className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-3 py-1 bg-[var(--card)] text-sm">
-                Lv: <strong>{level}</strong>
-              </span>
-              <span className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-3 py-1 bg-[var(--card)] text-sm">
-                友好度: <strong>{affPct}%</strong>
-              </span>
-            </div>
+          {/* 統計：バッジ化で視線固定 */}
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-3 py-1 bg-[var(--card)] text-sm">
+              現在の友好度 : <strong className="tabular-nums">Lv{level}</strong>
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--border-strong)] px-3 py-1 bg-[var(--card)] text-sm">
+              所持pt : <strong className="tabular-nums">{points}</strong>
+            </span>
+          </div>
             {/* 次レベルまでのプログレス（テーマトークンのみ使用） */}
             <div className="mb-4">
               <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--primary)_14%,var(--background))]">
@@ -167,7 +171,7 @@ export function CrabSpotlight() {
                 >
                   <div className="text-2xl">{f.emoji}</div>
                   <div className="text-sm font-semibold mt-1">{f.name}</div>
-                  <div className="text-xs opacity-70 mt-1">- {f.cost}pt / +{f.gain}pt</div>
+                  <div className="text-xs opacity-70 mt-1">購入ポイント: {f.cost}pt</div>
                 </button>
               ))}
             </div>
