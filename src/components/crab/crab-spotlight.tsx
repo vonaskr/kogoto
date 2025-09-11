@@ -13,6 +13,7 @@ import {
 } from "@rive-app/react-canvas";
 import { getPoints, getCrabState, feedCrab, getCrabLevelStep } from "@/lib/store";
 import { CRAB_QUIPS } from "@/lib/crab-quips";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 // Rive Editor と完全一致させる
 const ARTBOARD = "Crab";
@@ -132,7 +133,27 @@ export function CrabSpotlight() {
             onClick={() => setQuipIndex((i) => (i + 1) % CRAB_QUIPS.length)}
             className="mt-4 cursor-pointer rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none"
           >
-            <p className="text-sm opacity-90">{CRAB_QUIPS[quipIndex].text}</p>
+            <p className="text-sm opacity-90">
+              {CRAB_QUIPS[quipIndex].text.split(/(<k>.*?<\/k>)/).map((chunk, i) => {
+                const match = /^<k>(.*?)<\/k>$/.exec(chunk);
+                if (!match) return <span key={i}>{chunk}</span>;
+                const word = match[1];
+                return (
+                  <Popover key={i}>
+                    <PopoverTrigger asChild>
+                      <span className="underline cursor-pointer decoration-[var(--border-strong)]">
+                        {word}
+                      </span>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-2 text-sm max-w-xs">
+                      {/* TODO: vocab.csv を検索して現代語意味を表示する */}
+                      <div className="font-semibold">{word}</div>
+                      <div className="opacity-80">→ （意味をここに）</div>
+                    </PopoverContent>
+                  </Popover>
+                );
+              })}
+            </p>
             <div className="text-xs opacity-60">(タップで切り替え)</div>
           </div>
         ) : (
