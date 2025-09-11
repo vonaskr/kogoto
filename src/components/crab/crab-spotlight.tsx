@@ -24,6 +24,7 @@ export function CrabSpotlight() {
   const [mode, setMode] = useState<"talk" | "feed">("talk");
   const [points, setPoints] = useState(0);
   const [affinity, setAffinity] = useState(0); // 0..1
+  const [level, setLevel] = useState(1);
   const [quipIndex, setQuipIndex] = useState(0);
   const step = getCrabLevelStep(level);
   const affPct = step > 0 ? Math.round((affinity * 10000) / step) / 100 : 0;
