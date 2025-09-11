@@ -127,20 +127,21 @@ export function CrabSpotlight() {
 
         {/* 下段：モード別ビュー（最小実装） */}
         {mode === "talk" ? (
-          <div
-            role="button"
-            aria-label="次の小言"
-            onClick={() => setQuipIndex((i) => (i + 1) % CRAB_QUIPS.length)}
-            className="mt-4 cursor-pointer rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none"
-          >
+          <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-3 select-none">
+            {/* 小言テキスト（パネル自体はクリックで切替しない） */}
             <p className="text-sm opacity-90">
               {CRAB_QUIPS[quipIndex].text.split(/(<k>.*?<\/k>)/).map((chunk, i) => {
-                const match = /^<k>(.*?)<\/k>$/.exec(chunk);
+
+         const match = /^<k>(.*?)<\/k>$/.exec(chunk);
                 if (!match) return <span key={i}>{chunk}</span>;
                 const word = match[1];
                 return (
                   <Popover key={i}>
-                    <PopoverTrigger asChild>
+                    <PopoverTrigger
+                      asChild
+                      // 親へのクリック伝播を止める（切替しないための保険）
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <span className="underline cursor-pointer decoration-[var(--border-strong)]">
                         {word}
                       </span>
@@ -154,7 +155,17 @@ export function CrabSpotlight() {
                 );
               })}
             </p>
-            <div className="text-xs opacity-60">(タップで切り替え)</div>
+            {/* 右上に切替アイコンボタン */}
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                aria-label="小言を切り替える"
+                onClick={() => setQuipIndex((i) => (i + 1) % CRAB_QUIPS.length)}
+                className="rounded-full border-2 border-[var(--border-strong)] bg-[var(--card)] px-3 py-1 shadow-[var(--shadow-strong)] hover:translate-y-[1px] transition text-xs"
+              >
+                切替
+              </button>
+            </div>
           </div>
         ) : (
           <div className="mt-4 rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] px-4 py-4">
