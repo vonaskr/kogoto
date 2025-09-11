@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { RotateCw } from "lucide-react";
 import { loadVocabCsv } from "@/lib/vocab"; //
 import { CRAB_QUIPS, Quip } from "@/lib/crab-quips";
+import { KOGO_LEMMA } from "@/lib/lemma-map";
 import { getWeatherTag, type WeatherTag } from "@/lib/weather";
 
 // Rive Editor と完全一致させる
@@ -259,7 +260,11 @@ export function CrabSpotlight() {
                 {showQuip.split(/(<k>.*?<\/k>)/).map((chunk, i) => {                
                   const m = /^<k>(.*?)<\/k>$/.exec(chunk);
                 if (!m) return <span key={i}>{chunk}</span>;
-                const word = m[1];
+                const raw = m[1];
+                // 前後の空白や波ダッシュ等を軽く正規化（必要に応じて拡張可）
+                const word = raw.trim();
+                // lemma-map で活用形→基本形へ寄せる（未登録ならそのまま）
+                const canonical = KOGO_LEMMA[word] ?? word;
                 return (
                   <Popover key={i}>
                     <PopoverTrigger
@@ -271,11 +276,11 @@ export function CrabSpotlight() {
                       </span>
                     </PopoverTrigger>
                     <PopoverContent className="p-3 text-sm max-w-xs border-4 border-[var(--border-strong)] bg-[var(--card)] shadow-[var(--shadow-strong)]">
-                      <div className="font-semibold mb-1">{word}</div>
-                      <div className="opacity-80">
-                        {meaningsMap
-                          ? (meaningsMap[word] || ["（見つかりませんでした）"]).join(" / ")
-                          : "読み込み中…"}
+                      <div className="font-semibold mb-1">{canonical}</div>
+                      <div className="opacity-80 font-game">
+                      {meaningsMap
+                        ? (meaningsMap[canonical] || ["（見つかりませんでした）"]).join(" / ")
+                        : "読み込み中…"}
                       </div>
                     </PopoverContent>
                   </Popover>
