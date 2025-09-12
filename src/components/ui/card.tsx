@@ -1,18 +1,14 @@
-// components/ui/card.tsx
 import * as React from "react"
-import { cn } from "@/lib/utils"
-type CardProps = React.ComponentProps<"div"> & { pressable?: boolean }
 
-function Card({ className, pressable = true, ...props }: CardProps) {
+import { cn } from "@/lib/utils"
+
+function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-[var(--card)] text-[var(--foreground)] flex flex-col gap-6",
-        "rounded-lg border-4 border-[var(--border-strong)]",
-        "shadow-[var(--shadow-strong)] py-6",
-        pressable && "pressable", // ← デフォルトは押し込みON、必要時に無効化
-        className
+        "rounded-base flex flex-col shadow-shadow border-4 gap-6 py-6 border-[var(--border-strong)] bg-[var(--card)] text-foreground",
+        className,
       )}
       {...props}
     />
@@ -24,9 +20,8 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6",
-        "has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
-        className
+        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-[data-slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        className,
       )}
       {...props}
     />
@@ -37,7 +32,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+      className={cn("font-heading leading-none", className)}
       {...props}
     />
   )
@@ -47,7 +42,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn("text-sm opacity-80", className)}
+      className={cn("text-sm", className)}
       {...props}
     />
   )
@@ -57,7 +52,10 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-action"
-      className={cn("col-start-2 row-span-2 row-start-1 self-start justify-self-end", className)}
+      className={cn(
+        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
+        className,
+      )}
       {...props}
     />
   )
@@ -65,7 +63,11 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
 
 function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="card-content" className={cn("px-6", className)} {...props} />
+    <div
+      data-slot="card-content"
+      className={cn("px-6", className)}
+      {...props}
+    />
   )
 }
 
@@ -84,7 +86,7 @@ export {
   CardHeader,
   CardFooter,
   CardTitle,
-  CardAction,
   CardDescription,
   CardContent,
+  CardAction,
 }
