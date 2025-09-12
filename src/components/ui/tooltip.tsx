@@ -20,7 +20,7 @@ function TooltipContent({
     <RTooltip.Content
       sideOffset={sideOffset}
       className={cn(
-        "border-4 rounded-[var(--radius-lg)] px-3 py-2 text-sm",
+        "border-4 rounded-lg px-3 py-2 text-sm",
         "bg-[var(--card)] text-[var(--foreground)] border-[var(--border-strong)]",
         "shadow-[4px_4px_0_var(--border-strong)]",
         className

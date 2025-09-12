@@ -9,9 +9,9 @@ function Card({ className, pressable = true, ...props }: CardProps) {
       data-slot="card"
       className={cn(
         "bg-[var(--card)] text-[var(--foreground)] flex flex-col gap-6",
-        "rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)]",
+        "rounded-lg border-4 border-[var(--border-strong)]",
         "shadow-[var(--shadow-strong)] py-6",
-+        pressable && "pressable", // ← デフォルトは押し込みON、必要時に無効化
+        pressable && "pressable", // ← デフォルトは押し込みON、必要時に無効化
         className
       )}
       {...props}
