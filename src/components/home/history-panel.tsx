@@ -32,7 +32,7 @@ export function HistoryPanel() {
       );
       const today = new Date();
       let streak = 0;
-      for (;;) {
+      for (; ;) {
         const d = new Date();
         d.setDate(today.getDate() - streak);
         const key = `${d.getFullYear()}-${(d.getMonth() + 1)
@@ -51,7 +51,7 @@ export function HistoryPanel() {
   }, [learnedCount, totalCount]);
 
   return (
-    <Card pressable={false}>
+    <Card>
       <CardHeader className="pb-0">
         <CardTitle>学習履歴</CardTitle>
       </CardHeader>

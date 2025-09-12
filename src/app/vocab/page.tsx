@@ -54,7 +54,7 @@ export default function VocabListPage() {
   const [err, setErr] = useState<string | null>(null);
   const [all, setAll] = useState<Vocab[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("kana"); 
+  const [sortKey, setSortKey] = useState<SortKey>("kana");
 
   // 学習記録（スナップショット）
   const maps = useMemo(() => {
@@ -134,7 +134,7 @@ export default function VocabListPage() {
   return (
     <Container>
       {/* 外枠カードは押し込みを無効化 */}
-      <Card pressable={false}>
+      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="h1-fluid">単語リスト</CardTitle>
         </CardHeader>
