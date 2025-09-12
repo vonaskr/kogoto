@@ -49,6 +49,10 @@ export default function RhythmPlay() {
   const latencyRef = useRef<number>(0);
   const [micOn, setMicOn] = useState(false);
   const [lastHeard, setLastHeard] = useState<string>("");
+  const [debugRhythm, setDebugRhythm] = useState(false);
+  const [lastDeltaMs, setLastDeltaMs] = useState<number | null>(null);
+  const [lastGrade, setLastGrade] = useState<'perfect'|'great'|'good'|'miss'|null>(null);
+  const [centerAtMs, setCenterAtMs] = useState<number | null>(null);
 
   // 辞書ロードと問題生成
   useEffect(() => {
@@ -154,6 +158,8 @@ export default function RhythmPlay() {
     // タイミング
     const delta = (spoken.at + latencyRef.current) - answerCenterAtRef.current; // ms
     const g = timingGrade(delta);
+    setLastDeltaMs(Math.round(delta));
+    setLastGrade(g);
     const ok = (matchedIndex === q.answer) && g !== 'miss';
     sfx.click();
     judgeNow(ok);
@@ -186,6 +192,10 @@ export default function RhythmPlay() {
       // 回答受付ウィンドウの中心時刻（b=4から半拍後）を記録
       const beatMs = 60000 / bpm;
       answerCenterAtRef.current = performance.now() + beatMs * 0.5;
+      setCenterAtMs(Math.round(answerCenterAtRef.current));
+      // 新しい小問に入ったので、直前の判定可視化をリセット
+      setLastDeltaMs(null);
+      setLastGrade(null);
     }
 
     if (b === 8 && !judgedThisCycleRef.current) {
@@ -201,6 +211,13 @@ export default function RhythmPlay() {
       try { setMicOn(false); } catch {}
     };
   }, [stop]);
+  // デバッグ表示トグル: localStorage.kogoto:debugRhythm === "1" でON
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("kogoto:debugRhythm");
+      setDebugRhythm(v === "1");
+    } catch {}
+  }, []);
 
   const startPlay = async () => {
     if (!q) return;
@@ -275,6 +292,13 @@ export default function RhythmPlay() {
               {lastHeard && (
                 <div className="text-xs opacity-60 mb-2">
                   音声: {lastHeard}
+                </div>
+              )}
+              {debugRhythm && (
+                <div className="text-xs mb-3 px-2 py-1 inline-flex gap-3 rounded border border-[var(--border-strong)] bg-[var(--card)]">
+                  <span>判定センター(ms): {centerAtMs ?? "—"}</span>
+                  <span>Δ(ms): {lastDeltaMs ?? "—"}</span>
+                  <span>GRADE: {lastGrade ?? "—"}</span>
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
