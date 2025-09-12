@@ -1,66 +1,130 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+ @import "tailwindcss";
+ @import "tw-animate-css";
+ 
+ @custom-variant dark (&:is(.dark *));
+ 
+ :root {
+    --background: #fef6e4;
+    --secondary-background: oklch(100% 0 0);
+    --foreground: #001858;
+    --main-foreground: #001858;
+    --main: #f3d2c1;
+    --border: #172c66;
+    --ring: #172c66;
+    --overlay: #172c66;
+    --shadow: 4px 4px 0px 0px var(--border);
+    --chart-1: #FF7A05;
+    --chart-2: #0099FF;
+    --chart-3: #FFBF00;
+    --chart-4: #00D696;
+    --chart-5: #7A83FF;
+    --chart-active-dot: #172c66;
+    --card : #f3d2c1;
+    --primary: #f3d2c1;
+    --accent_pink:#f582ae;
+    --primary-foreground: #172c66;
 
-/* --- Tailwind v4 の色名/半径 → あなたのCSS変数 ---------------
-   これが無いと bg-card / text-foreground などが解決できず崩れます。
----------------------------------------------------------------- */
-@theme inline {
+    --accent: #8bd3dd;
+    
+
+    /* 標準のボーダー色（細線用）。太枠は --border-strong を直接参照 */
+    --border-strong: #172c66;
+ }
+ 
+ .dark {
+   --background: oklch(26.86% 0.0327 60.06);
+  --secondary-background: oklch(23.93% 0 0);
+  --foreground: oklch(92.49% 0 0);
+  --main-foreground: oklch(0% 0 0);
+  --main: oklch(67.56% 0.1796 49.61);
+  --border: oklch(0% 0 0);
+  --ring: oklch(100% 0 0);
+  --shadow: 4px 4px 0px 0px var(--border);
+  --chart-1: #EB6D00;
+  --chart-2: #008AE5;
+  --chart-3: #E5AC00;
+  --chart-4: #00BD84;
+  --chart-5: #7A83FF;
+  --chart-active-dot: #fff;
+ }
+ 
+ @theme inline {
+   --color-main: var(--main);
   --color-background: var(--background);
+  --color-secondary-background: var(--secondary-background);
   --color-foreground: var(--foreground);
-
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--foreground);
-
-  --color-card: var(--card);
-  --color-card-foreground: var(--foreground);
-
-  /* shadcnやborderユーティリティが参照する標準のボーダー色 */
+  --color-main-foreground: var(--main-foreground);
   --color-border: var(--border);
+  --color-overlay: var(--overlay);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 
-  /* 角丸トークン（shadcnの rounded-lg 等が参照） */
-  --radius-sm: calc(var(--radius-lg) - 4px);
-  --radius-md: calc(var(--radius-lg) - 2px);
-  --radius-lg: var(--radius-lg);
-  --radius-xl: calc(var(--radius-lg) + 4px);
+  --spacing-boxShadowX: 4px;
+  --spacing-boxShadowY: 4px;
+  --spacing-reverseBoxShadowX: -4px;
+  --spacing-reverseBoxShadowY: -4px;
+  --radius-base: 10px;
+  --shadow-shadow: var(--shadow);
+  --font-weight-base: 500;
+  --font-weight-heading: 700;
+ }
+   
+ @layer base {
+   body {
+    @apply text-foreground font-base bg-background;
+  }
 
-  /*token for button*/
-  --radius-btn: 12px;
+  h1, h2, h3, h4, h5, h6{
+    @apply font-heading;
+  }
 
-  /*shadow*/
-  --shadow-lift:     3px 3px 0 var(--border-strong);  /* ホバー時に少し強く */
-  --shadow-pressed:  3px 3px 0 var(--border-strong);  /* 押下で短く */
-   --shadow-press: 2px 2px 0 var(--border-strong);   /* 押したとき：影を小さくする */
-} 
+  /* --- 互換: 旧トークン → 新トークンの橋渡し ------------------- */
+  :root {
+    /* 旧デザインが参照しているCSS変数を neobrutalism 変数にマップ */
+    --card: var(--secondary-background);
+    --primary: var(--main);
+    --primary-foreground: var(--main-foreground);
+    --accent: var(--main);                 /* 必要なら別色に変更可 */
+    --border-strong: var(--border);
+    --radius-lg: var(--radius-base);
+    --shadow-strong: var(--shadow);
+  }
 
-/* --- あなたの“ポップ”テーマ（唯一の真実） -------------------- */
-:root {
-  --background: #FFFBE6;
-  --foreground: #1A1A1A;
+  /* 既存の border-* ユーティリティの既定色を border へ統一 */
+  * { @apply border-border; }
+ }
 
-  --primary: #FF5C8A;
-  --primary-foreground: #111111;
-
-  --accent: #00C2FF;
-  --card: #FFF2B3;
-
-  /* 標準のボーダー色（細線用）。太枠は --border-strong を直接参照 */
-  --border: #D5CFA9;
-  --border-strong: #1A1A1A;
-
-  --radius-lg: 16px;
-  --shadow-strong: 3px 3px 0 var(--border-strong);
+/* --- フォント（ゲーム風） --------------------------------------- */
+@font-face{
+  font-family: "JF Dot Ayu 18";
+  src: url("/fonts/JF-Dot-Ayu18.ttf") format("truetype");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+.font-game{
+  font-family: "JF Dot Ayu 18", ui-sans-serif, system-ui, -apple-system,
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Segoe UI", Arial, sans-serif;
 }
 
+/* --- pressable（押し込み演出） ---------------------------------- */
+@layer utilities {
+  .pressable {
+    transition: transform 160ms cubic-bezier(.2,.9,.2,1), box-shadow 160ms, filter 160ms;
+    will-change: transform, box-shadow;
+  }
+  .pressable:hover    { box-shadow: var(--shadow); }
+  .pressable:active   { transform: translateY(1px); box-shadow: var(--shadow); }
+  .pressable:focus-visible { outline: none; box-shadow: var(--shadow); }
+}
 
-
-/* --- 背景パターン（任意） ------------------------------------- */
+/* --- 任意：背景ユーティリティ（使っていれば残す） -------------- */
 .grid-bg{
   background-image:
-    linear-gradient(to right, rgba(26,26,26,.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(26,26,26,.08) 1px, transparent 1px);
+    linear-gradient(to right, rgba(0,0,0,.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,.08) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 .dot-bg{
@@ -68,73 +132,18 @@
     radial-gradient(circle at 3px 3px, rgba(0,0,0,0.3) 1px, transparent 1px);
   background-size: 16px 16px;
 }
-
 .grid-dot-bg{
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(26,26,26,.10) 1px, transparent 1px),
-    linear-gradient(to right, rgba(26,26,26,.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(26,26,26,.06) 1px, transparent 1px);
+    radial-gradient(circle at 1px 1px, rgba(0,0,0,.10) 1px, transparent 1px),
+    linear-gradient(to right, rgba(0,0,0,.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,.06) 1px, transparent 1px);
   background-size: 16px 16px, 32px 32px, 32px 32px;
 }
 
-/* 上部に淡いアクセントの“ツートン帯”を敷く */
-.two-tone-band{
-  --band-h: 20svh; /* 好みで 16-30svh */
-  background-image:
-    linear-gradient(0deg, var(--primary) , var(--band-h), transparent var(--band-h));
-  background-repeat: no-repeat;
-}
-
-/* --- ベース適用 ------------------------------------------------ */
-@layer base {
-    * { @apply border-border; }
-  html { scroll-behavior: smooth; }
-  body { @apply bg-background text-foreground antialiased; }
-  /* iOS等のタップ波紋を抑制 */
-  a, button { -webkit-tap-highlight-color: transparent; }
-  /* Reduced Motion に配慮 */
-  @media (prefers-reduced-motion: reduce) {
-    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
-  }
-}
-
-@layer utilities {
-  .page      { @apply mx-auto max-w-screen-lg px-4 sm:px-6 lg:px-8 py-6; }
-  .card-grid { @apply grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3; }
-  .actions   { @apply flex flex-col sm:flex-row gap-3; }
-  .h1-fluid  { font-size: clamp(1.75rem, 5vw, 2.5rem); font-weight: 800; letter-spacing: -0.01em; }
-  /* 共通プレス演出（右下影×微小移動） */
-  .pressable {
-    transition: transform 160ms cubic-bezier(.2,.9,.2,1), box-shadow 160ms, filter 160ms;
-    will-change: transform, box-shadow;
-  }
-  .pressable:hover    { box-shadow: var(--shadow-lift); }
-  .pressable:active   { transform: translateY(1px); box-shadow: var(--shadow-pressed); }
-  .pressable:focus-visible { outline: none; box-shadow: var(--shadow-lift); }
-}
-
-/*正誤用画面フラッシュアニメーション*/
+/* --- 正誤アニメ ----------------------- */
 @keyframes scaleIn {
   0% { transform: scale(0.5); opacity: 0; }
   50% { transform: scale(1.2); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
-
-.animate-scaleIn {
-  animation: scaleIn 0.6s ease-out forwards;
-}
-
-/* --- Game font: JF Dot Ayu 18 (self-hosted) --- */
-@font-face{
-  font-family: "JF Dot Ayu 18";
-  src: url("/fonts/JF-Dot-Ayu18.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap; /* デプロイ時もFOUT防止しつつ読み込み */
-}
-
-/* 小言だけピクセル調の雰囲気に */
-.font-game{
-  font-family: "JF Dot Ayu 18", ui-sans-serif, system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Segoe UI", Arial, sans-serif;
-  letter-spacing: 0.01em; /* 読みやすさ微調整（好みで） */
-}
+.animate-scaleIn { animation: scaleIn 0.6s ease-out forwards; }
