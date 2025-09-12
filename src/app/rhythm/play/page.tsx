@@ -12,6 +12,9 @@ import { buildQuizSet, type Quiz } from "@/lib/question-engine";
 import { useMetronome } from "@/lib/use-metronome";
 import { speak } from "@/lib/tts";
 import { sfx } from "@/lib/sfx";
+import { startVoice, stopVoice, voiceSupported } from "@/lib/voice";
+import { timingGrade, contentMatch, normalizeJa } from "@/lib/judge";
+import { getLatencyOffset, calibrateOnce } from "@/lib/latency";
 import { saveSession, type SessionItem, getWrongWeights } from "@/lib/store";
 
 const QUIZ_COUNT = 5;
@@ -42,6 +45,10 @@ export default function RhythmPlay() {
 
   const barBeatRef = useRef(0);              // 1..8 管理
   const judgedThisCycleRef = useRef(false);  // 二重判定防止
+  const answerCenterAtRef = useRef<number>(0); // 声判定の中心時刻(ms)
+  const latencyRef = useRef<number>(0);
+  const micOnRef = useRef(false);
+  const [lastHeard, setLastHeard] = useState<string>("");
 
   // 辞書ロードと問題生成
   useEffect(() => {
@@ -134,6 +141,24 @@ export default function RhythmPlay() {
     }, 380);
   };
 
+  // 音声結果ハンドラ：タイミング(±ms)＋内容一致 → judgeNow()
+  const onVoice = (spoken: { normalized: string; confidence: number; at: number }) => {
+    if (!q || phase !== "choices" || judgedThisCycleRef.current) return;
+    // 低信頼は無視（緩め）
+    if (spoken.confidence < 0.5) return;
+    setLastHeard(spoken.normalized);
+    // 内容一致
+    const { matchedIndex } = contentMatch(spoken.normalized, q.choices, 'choices');
+    if (matchedIndex == null) return;
+    setSelected(matchedIndex);
+    // タイミング
+    const delta = (spoken.at + latencyRef.current) - answerCenterAtRef.current; // ms
+    const g = timingGrade(delta);
+    const ok = (matchedIndex === q.answer) && g !== 'miss';
+    sfx.click();
+    judgeNow(ok);
+  };
+
   // メトロノーム
   const { bpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, (beat /*1..4*/) => {
     if (!q) return;
@@ -158,6 +183,9 @@ export default function RhythmPlay() {
     if (b === 4) {
       setPhase("choices");
       sfx.click();
+      // 回答受付ウィンドウの中心時刻（b=4から半拍後）を記録
+      const beatMs = 60000 / bpm;
+      answerCenterAtRef.current = performance.now() + beatMs * 0.5;
     }
 
     if (b === 8 && !judgedThisCycleRef.current) {
@@ -171,6 +199,16 @@ export default function RhythmPlay() {
 
   const startPlay = async () => {
     if (!q) return;
+        // 一度だけ遅延オフセットを確保（将来：手拍子校正に差し替え）
+    if (!latencyRef.current) latencyRef.current = getLatencyOffset() || (await calibrateOnce(120));
+     await start();
+    // 音声有効なら起動（常にタップは併用可）
+    if (voiceSupported() && !micOnRef.current) {
+      micOnRef.current = !!startVoice({
+        lang: 'ja-JP',
+        onResult: (r) => onVoice({ normalized: r.normalized, confidence: r.confidence, at: r.at }),
+      });
+    }
     await start();
     speak(q.word, { lang: "ja-JP", rate: 0.95 });
     justStartedRef.current = true;
@@ -193,8 +231,11 @@ export default function RhythmPlay() {
                 <div className="font-semibold">
                   リズム学習：{idx + 1} / {qs.length}
                 </div>
-                <div className="text-sm opacity-70">
-                  BPM: {bpm} ／ COMBO: {streak}
+                  <div className="text-sm opacity-70 flex items-center gap-3">
+                  <span>BPM: {bpm} ／ COMBO: {streak}</span>
+                  <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--card)]">
+                    マイク: {voiceSupported() ? (micOnRef.current ? "ON" : "OFF") : "未対応"}
+                  </span>
                 </div>
               </div>
               <Progress value={progress} className="mb-6" />
@@ -214,11 +255,15 @@ export default function RhythmPlay() {
               <div className="text-2xl font-extrabold mb-2">「{q.word}」の現代語は？</div>
               <div className="text-sm opacity-70 mb-4">
                 {phase === "prompt" && "提示中…（拍1）"}
-                {phase === "choices" && "選択肢をタップ！（拍4〜）"}
+                {phase === "choices" && "選択肢をタップ！or 声で「1/2/3/4」や意味キーワード！"}
                 {phase === "judge" && "判定中！"}
                 {phase === "ready" && (reviewMode ? "復習対象から出題します" : "スタートを押してね")}
               </div>
-
+              {lastHeard && (
+                <div className="text-xs opacity-60 mb-2">
+                  音声: {lastHeard}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {q.choices.map((txt, idxChoice) => (
                   <Button
