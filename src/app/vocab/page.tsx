@@ -134,7 +134,7 @@ export default function VocabListPage() {
   return (
     <Container>
       {/* 外枠カードは押し込みを無効化 */}
-      <Card pressable={false}>
+      <Card >
         <CardHeader className="pb-3">
           <CardTitle className="h1-fluid">単語リスト</CardTitle>
         </CardHeader>

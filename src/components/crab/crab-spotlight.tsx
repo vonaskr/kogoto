@@ -339,7 +339,7 @@ export function CrabSpotlight() {
             <div className="mb-4">
               <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--primary)_14%,var(--background))]">
                 <div
-                  className="h-3 rounded bg-[var(--primary)]"
+                  className="h-3 rounded bg-[var(--accent)]"
                   style={{ width: `${affPct}%` }}
                   aria-valuemin={0}
                   aria-valuemax={100}
@@ -356,7 +356,7 @@ export function CrabSpotlight() {
                 <button
                   key={f.id}
                   onClick={() => handleFeed(f.cost, f.gain)}
-                  className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--card)] shadow-[var(--shadow-strong)] p-3 text-center hover:scale-[0.99] transition disabled:opacity-60"
+                  className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] bg-[var(--background)] shadow-[var(--shadow-strong)] p-3 text-center hover:scale-[0.99] transition disabled:opacity-60"
                   disabled={points < f.cost}
                 >
                   <div className="text-2xl">{f.emoji}</div>
