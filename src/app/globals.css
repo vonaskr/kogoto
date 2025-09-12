@@ -32,6 +32,23 @@
   /*shadow*/
   --shadow-lift:     3px 3px 0 var(--border-strong);  /* ホバー時に少し強く */
   --shadow-pressed:  2px 2px 0 var(--border-strong);  /* 押下で影を短く（名称を一本化） */
+
+  /* === neobrutalism.dev bridge tokens (colors / radius / shadow / spacing) === */
+  /* colors */
+  --color-main: var(--primary);
+  --color-main-foreground: var(--primary-foreground);
+  --color-secondary-background: var(--card);
+  /* radius */
+  --radius-base: var(--radius-lg);        /* rounded-base → あなたの --radius-lg に接続 */
+  /* shadows（box-shadowスケール） */
+  --shadow-shadow: var(--shadow-strong);  /* shadow-shadow クラス用の実体 */
+  /* translate 量（影打ち消し用） */
+  --spacing-boxShadowX: 3px;
+  --spacing-boxShadowY: 3px;
+  --spacing-reverseBoxShadowX: -3px;
+  --spacing-reverseBoxShadowY: -3px;
+  /* weight（使われる“font-base”に対応。中身はお好みで） */
+  --font-weight-base: 600;
 } 
 
 /* --- あなたの“ポップ”テーマ（唯一の真実） -------------------- */
