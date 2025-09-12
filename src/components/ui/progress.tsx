@@ -1,31 +1,33 @@
-// components/ui/progress.tsx
+"use client"
+
+import * as ProgressPrimitive from "@radix-ui/react-progress"
+
 import * as React from "react"
+
 import { cn } from "@/lib/utils"
 
-type Props = React.HTMLAttributes<HTMLDivElement> & { value?: number }
-
-function Progress({ value = 0, className, ...props }: Props) {
+function Progress({
+  className,
+  value,
+  ...props
+}: React.ComponentProps<typeof ProgressPrimitive.Root> & {
+  value?: number
+}) {
   return (
-    <div
-      role="progressbar"
-      aria-valuenow={value}
-      aria-valuemin={0}
-      aria-valuemax={100}
+    <ProgressPrimitive.Root
+      data-slot="progress"
       className={cn(
-        "h-3 w-full overflow-hidden rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)]",
-        "bg-[var(--card)]",
-        className
+        "relative h-4 w-full overflow-hidden rounded-base bg-border-2 border-border bg-secondary-background",
+        className,
       )}
       {...props}
     >
-      <div
-        className="h-full"
-        style={{
-          width: `${Math.max(0, Math.min(100, value))}%`,
-          background: "var(--primary)",
-        }}
+      <ProgressPrimitive.Indicator
+        data-slot="progress-indicator"
+        className="h-full w-full flex-1 border-r-2 border-border bg-[var(--accent)] transition-all"
+        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
       />
-    </div>
+    </ProgressPrimitive.Root>
   )
 }
 

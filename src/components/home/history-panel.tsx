@@ -51,7 +51,7 @@ export function HistoryPanel() {
   }, [learnedCount, totalCount]);
 
   return (
-    <Card pressable={false}>
+    <Card>
       <CardHeader className="pb-0">
         <CardTitle>学習履歴</CardTitle>
       </CardHeader>

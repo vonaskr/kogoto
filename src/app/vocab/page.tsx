@@ -36,16 +36,16 @@ function statusOf(
 function statusBg(st: Status) {
   // テーマ変数のみで配色（color-mix）
   if (st === "recentOk")
-    return "color-mix(in srgb, var(--primary) 24%, var(--background) 76%)";
+    return "color-mix(in srgb, var(--primary) 90%, var(--background) 10%)";
   if (st === "review")
-    return "color-mix(in srgb, var(--accent) 24%, var(--background) 76%)";
+    return "color-mix(in srgb, var(--accent) 90%, var(--background) 10%)";
   return "var(--background)";
 }
 function badgeBg(st: Status) {
   if (st === "recentOk")
-    return "color-mix(in srgb, var(--primary) 36%, var(--background) 64%)";
+    return "color-mix(in srgb, var(--primary) 80%, var(--background) 20%)";
   if (st === "review")
-    return "color-mix(in srgb, var(--accent) 36%, var(--background) 64%)";
+    return "color-mix(in srgb, var(--accent) 80%, var(--background) 20%)";
   return "var(--card)";
 }
 
@@ -54,7 +54,7 @@ export default function VocabListPage() {
   const [err, setErr] = useState<string | null>(null);
   const [all, setAll] = useState<Vocab[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("kana"); 
+  const [sortKey, setSortKey] = useState<SortKey>("kana");
 
   // 学習記録（スナップショット）
   const maps = useMemo(() => {
@@ -133,8 +133,7 @@ export default function VocabListPage() {
 
   return (
     <Container>
-      {/* 外枠カードは押し込みを無効化 */}
-      <Card pressable={false}>
+      <Card >
         <CardHeader className="pb-3">
           <CardTitle className="h1-fluid">単語リスト</CardTitle>
         </CardHeader>
