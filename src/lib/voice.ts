@@ -25,13 +25,14 @@ export function voiceSupported(): boolean {
 
 export function startVoice(opts: Opts = {}) {
   if (!voiceSupported()) return false;
-  const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  rec = new SR();
-  rec.lang = opts.lang ?? 'ja-JP';
-  rec.continuous = true;
-  rec.interimResults = true;
+  // コンストラクタの型を明示
+  const SR = (window.SpeechRecognition || (window as any).webkitSpeechRecognition) as { new(): SpeechRecognition };
+  const r: SpeechRecognition = new SR();   // ← ローカルに確定型で保持
+  r.lang = opts.lang ?? 'ja-JP';
+  r.continuous = true;
+  r.interimResults = true;
 
-  rec.onresult = (e: any) => {
+  r.onresult = (e: any) => {
     const last = e.results?.[e.results.length - 1];
     if (!last?.isFinal) return;
     const alt = last[0];
@@ -40,11 +41,14 @@ export function startVoice(opts: Opts = {}) {
     const confidence = Number(alt?.confidence ?? 0);
     opts.onResult?.({ text, normalized, confidence, at: performance.now() });
   };
-  try { rec.start(); } catch {}
+  try { r.start(); } catch {}
+  rec = r; // 最後に保存
   return true;
 }
 
 export function stopVoice() {
-  try { rec?.stop(); } catch {}
-  rec = undefined;
+  if (rec) {
+  try { rec.stop(); } catch {}
+  }
+  rec = null;
 }
