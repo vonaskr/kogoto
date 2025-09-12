@@ -12,9 +12,14 @@ const buttonVariants = cva(
       variant: {
         default:
            "text-main-foreground bg-main border-4 border-[var(--border-strong)] shadow-shadow hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none",
-        noShadow: "text-main-foreground bg-main border-4 border-[var(--border-strong)]",
+        primary:
+          "text-main-foreground bg-main border-4 border-[var(--border-strong)] shadow-shadow hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none",
+        noShadow: 
+          "text-main-foreground bg-main border-4 border-[var(--border-strong)]",
         neutral:
            "bg-secondary-background text-foreground border-4 border-[var(--border-strong)] shadow-shadow hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none",
+        surface:
+          "bg-secondary-background text-foreground border-4 border-[var(--border-strong)] shadow-shadow hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none",
         reverse:
           "text-main-foreground bg-main border-4 border-[var(--border-strong)] hover:translate-x-reverseBoxShadowX hover:translate-y-reverseBoxShadowY hover:shadow-shadow",
         /* 既存の accent 互換 */
