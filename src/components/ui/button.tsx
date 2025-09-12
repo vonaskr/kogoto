@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center font-semibold transition-colors " +
-  "border-4 rounded-md focus-visible:outline-none " +
+  "border-4 rounded-lg focus-visible:outline-none " +
   "disabled:opacity-50 disabled:pointer-events-none",
    
   {
@@ -16,16 +16,12 @@ const buttonVariants = cva(
       variant: {
         // pink button
          primary:
-          "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--border-strong)] " +
-          "shadow-[var(--shadow-strong)] hover:shadow-[var(--shadow-strong)] active:shadow-[var(--shadow-press)]",
-        // normal button
+          "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--border-strong)]",
           surface:
-          "bg-[var(--card)] text-[var(--foreground)] border-[var(--border-strong)] " +
-          "shadow-[var(--shadow-strong)] hover:shadow-[var(--shadow-strong)] active:shadow-[var(--shadow-press)]",
+          "bg-[var(--card)] text-[var(--foreground)] border-[var(--border-strong)]",
         // pink
           accent:
-          "bg-[var(--accent)] text-[var(--foreground)] border-[var(--border-strong)] " +
-          "shadow-[var(--shadow-strong)] hover:shadow-[var(--shadow-strong)] active:shadow-[var(--shadow-press)]",
+           "bg-[var(--accent)] text-[var(--foreground)] border-[var(--border-strong)]",
       },
       size: { sm: "h-8 px-3 text-sm", md: "h-10 px-4 text-base", lg: "h-12 px-6 text-lg" },
       block: { true: "w-full", false: "" },
@@ -48,8 +44,8 @@ function Button({ className, variant, size, block, asChild, ...props }: ButtonBa
       className={cn(
         buttonVariants({ variant, size, block }),
         "whitespace-normal break-all text-center leading-tight",
-        "shadow-[var(--shadow-strong)] pressable", // ← 影＆押し込み
-        className
+        // 影＆押し込みは pressable に集約（hover/active の影量も一元管理）
+        "shadow-[var(--shadow-strong)] pressable active:shadow-[var(--shadow-pressed)]",        className
       )}
       {...props}
     />
