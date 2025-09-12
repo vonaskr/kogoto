@@ -47,7 +47,7 @@ export default function RhythmPlay() {
   const judgedThisCycleRef = useRef(false);  // 二重判定防止
   const answerCenterAtRef = useRef<number>(0); // 声判定の中心時刻(ms)
   const latencyRef = useRef<number>(0);
-  const micOnRef = useRef(false);
+  const [micOn, setMicOn] = useState(false);
   const [lastHeard, setLastHeard] = useState<string>("");
 
   // 辞書ロードと問題生成
@@ -194,7 +194,12 @@ export default function RhythmPlay() {
   });
 
   useEffect(() => {
-    return () => stop();
+      return () => {
+      stop();
+      stopVoice();
+      // アンマウント時なので setMicOn は必須ではないが、開発時のホットリロード対策として明示
+      try { setMicOn(false); } catch {}
+    };
   }, [stop]);
 
   const startPlay = async () => {
@@ -203,11 +208,12 @@ export default function RhythmPlay() {
     if (!latencyRef.current) latencyRef.current = getLatencyOffset() || (await calibrateOnce(120));
      await start();
     // 音声有効なら起動（常にタップは併用可）
-    if (voiceSupported() && !micOnRef.current) {
-      micOnRef.current = !!startVoice({
+    if (voiceSupported() && !micOn) {
+      const ok = startVoice({
         lang: 'ja-JP',
         onResult: (r) => onVoice({ normalized: r.normalized, confidence: r.confidence, at: r.at }),
       });
+      if (ok) setMicOn(true);
     }
     await start();
     speak(q.word, { lang: "ja-JP", rate: 0.95 });
@@ -234,7 +240,7 @@ export default function RhythmPlay() {
                   <div className="text-sm opacity-70 flex items-center gap-3">
                   <span>BPM: {bpm} ／ COMBO: {streak}</span>
                   <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--card)]">
-                    マイク: {voiceSupported() ? (micOnRef.current ? "ON" : "OFF") : "未対応"}
+                    マイク: {voiceSupported() ? (micOn ? "ON" : "OFF") : "未対応"}
                   </span>
                 </div>
               </div>
@@ -246,7 +252,14 @@ export default function RhythmPlay() {
                     {reviewMode ? "復習スタート" : "スタート"}
                   </Button>
                 ) : (
-                  <Button variant="accent" onClick={stop}>
+                  <Button
+                    variant="accent"
+                    onClick={() => {
+                      stop();
+                      stopVoice();
+                      setMicOn(false);
+                    }}
+                  >
                     ストップ
                   </Button>
                 )}
