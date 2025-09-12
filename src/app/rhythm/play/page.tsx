@@ -12,7 +12,7 @@ import { buildQuizSet, type Quiz } from "@/lib/question-engine";
 import { useMetronome } from "@/lib/use-metronome";
 import { speak } from "@/lib/tts";
 import { sfx } from "@/lib/sfx";
-import { startVoice, stopVoice, voiceSupported } from "@/lib/voice";
+import { startVoice, stopVoice, voiceSupported, warmupMic } from "@/lib/voice";
 import { timingGrade, contentMatch, normalizeJa } from "@/lib/judge";
 import { getLatencyOffset, calibrateOnce } from "@/lib/latency";
 import { saveSession, type SessionItem, getWrongWeights } from "@/lib/store";
@@ -53,6 +53,9 @@ export default function RhythmPlay() {
   const [lastDeltaMs, setLastDeltaMs] = useState<number | null>(null);
   const [lastGrade, setLastGrade] = useState<'perfect'|'great'|'good'|'miss'|null>(null);
   const [centerAtMs, setCenterAtMs] = useState<number | null>(null);
+  const [debugVoice, setDebugVoice] = useState(false);
+  const [interimText, setInterimText] = useState<string>("");
+  const [voiceErr, setVoiceErr] = useState<string>("");
 
   // 辞書ロードと問題生成
   useEffect(() => {
@@ -216,6 +219,8 @@ export default function RhythmPlay() {
     try {
       const v = localStorage.getItem("kogoto:debugRhythm");
       setDebugRhythm(v === "1");
+      const v2 = localStorage.getItem("kogoto:debugVoice");
+      setDebugVoice(v2 === "1");
     } catch {}
   }, []);
 
@@ -226,9 +231,20 @@ export default function RhythmPlay() {
      await start();
     // 音声有効なら起動（常にタップは併用可）
     if (voiceSupported() && !micOn) {
+      // 先にマイク権限のウォームアップ（Chromeでポップアップを確実に出す）
+      const granted = await warmupMic();
+      if (!granted) {
+        setVoiceErr("マイク権限が許可されていません（またはHTTPS/localhostでアクセスしてください）。");
+      }
       const ok = startVoice({
         lang: 'ja-JP',
-        onResult: (r) => onVoice({ normalized: r.normalized, confidence: r.confidence, at: r.at }),
+        onResult: (r) => {
+          setInterimText("");
+          setVoiceErr("");
+          onVoice({ normalized: r.normalized, confidence: r.confidence, at: r.at });
+        },
+        onInterim: (t) => setInterimText(t),
+        onError: (msg) => setVoiceErr(msg),
       });
       if (ok) setMicOn(true);
     }
@@ -292,6 +308,12 @@ export default function RhythmPlay() {
               {lastHeard && (
                 <div className="text-xs opacity-60 mb-2">
                   音声: {lastHeard}
+                </div>
+              )}
+              {debugVoice && (
+                <div className="text-xs mb-3 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]">
+                  <div>interim: <span className="opacity-70">{interimText || "（なし）"}</span></div>
+                  <div>error: <span className="opacity-70">{voiceErr || "（なし）"}</span></div>
                 </div>
               )}
               {debugRhythm && (
