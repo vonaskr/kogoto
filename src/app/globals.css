@@ -31,8 +31,7 @@
 
   /*shadow*/
   --shadow-lift:     3px 3px 0 var(--border-strong);  /* ホバー時に少し強く */
-  --shadow-pressed:  3px 3px 0 var(--border-strong);  /* 押下で短く */
-   --shadow-press: 2px 2px 0 var(--border-strong);   /* 押したとき：影を小さくする */
+  --shadow-pressed:  2px 2px 0 var(--border-strong);  /* 押下で影を短く（名称を一本化） */
 } 
 
 /* --- あなたの“ポップ”テーマ（唯一の真実） -------------------- */
