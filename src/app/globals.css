@@ -39,7 +39,7 @@
   --color-main-foreground: var(--primary-foreground);
   --color-secondary-background: var(--card);
   /* radius */
-  --radius-base: var(--radius-lg);        /* rounded-base → あなたの --radius-lg に接続 */
+  --radius-base:  12px;        /* rounded-base →  --radius-lg に接続 */
   /* shadows（box-shadowスケール） */
   --shadow-shadow: var(--shadow-strong);  /* shadow-shadow クラス用の実体 */
   /* translate 量（影打ち消し用） */
