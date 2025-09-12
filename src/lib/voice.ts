@@ -50,5 +50,5 @@ export function stopVoice() {
   if (rec) {
   try { rec.stop(); } catch {}
   }
-  rec = null;
+  rec = undefined;
 }
