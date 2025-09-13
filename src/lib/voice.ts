@@ -5,7 +5,14 @@ export type VoiceResult = {
   confidence: number;
   at: number; // performance.now() 時刻
 };
-type Opts = { lang?: string; onResult?: (r: VoiceResult)=>void };
+
+type Opts = {
+  lang?: string;
+  onResult?: (r: VoiceResult)=>void;     // 確定
+  onInterim?: (text: string)=>void;      // 途中経過
+  onError?: (err: string)=>void;         // エラー通知
+  autoRestart?: boolean;                 // 切断時に再起動（既定: true）
+};
 
 let rec: SpeechRecognition | undefined;
 
@@ -23,28 +30,68 @@ export function voiceSupported(): boolean {
   return typeof window !== 'undefined' && (('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window));
 }
 
+// マイク権限を要求
+export async function warmupMic(): Promise<boolean> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return false;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    return true;
+  } catch (e: any) {
+    return false;
+  }
+}
+// 権限状態の確認（Permissions API）
+export async function getMicPermissionState(): Promise<'granted'|'denied'|'prompt'|'unsupported'> {
+  try {
+    // 一部ブラウザでは 'microphone' が未サポート
+    // @ts-ignore
+    if (!navigator.permissions?.query) return 'unsupported';
+    // @ts-ignore
+    const st = await navigator.permissions.query({ name: 'microphone' as any });
+    return (st?.state as any) ?? 'unsupported';
+  } catch {
+    return 'unsupported';
+  }
+}
+
 export function startVoice(opts: Opts = {}) {
   if (!voiceSupported()) return false;
-  const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  rec = new SR();
-  rec.lang = opts.lang ?? 'ja-JP';
-  rec.continuous = true;
-  rec.interimResults = true;
 
-  rec.onresult = (e: any) => {
+  const SR = (window.SpeechRecognition ?? (window as any).webkitSpeechRecognition) as typeof SpeechRecognition;
+  if (!SR) return false;
+  const r = new SR();   // ← 型は推論で SpeechRecognition
+  r.lang = opts.lang ?? "ja-JP";
+  r.continuous = true;
+  r.interimResults = true;
+  r.maxAlternatives = 5;
+
+  r.onresult = (e: SpeechRecognitionEvent) => {
     const last = e.results?.[e.results.length - 1];
     if (!last?.isFinal) return;
     const alt = last[0];
-    const text = String(alt?.transcript ?? '').trim();
+    const text = String(alt?.transcript ?? "").trim();
     const normalized = normalizeJa(text);
     const confidence = Number(alt?.confidence ?? 0);
     opts.onResult?.({ text, normalized, confidence, at: performance.now() });
   };
-  try { rec.start(); } catch {}
+
+    r.onerror = (ev: any) => {
+    // 可能なら error/message/type から読み取り、人間可読の文字列にする
+    const msg = (ev && (ev.error || ev.message || ev.type)) ? String(ev.error || ev.message || ev.type) : 'unknown';
+    opts.onError?.(msg);
+  };
+  r.onend = () => console.log("SpeechRecognition ended");
+
+  try { r.start(); } catch {}
+
+  rec = r;
   return true;
 }
 
 export function stopVoice() {
-  try { rec?.stop(); } catch {}
+  if (rec) {
+  try { rec.stop(); } catch {}
+  }
   rec = undefined;
 }

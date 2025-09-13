@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {  Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Container } from "@/components/layout/container";
@@ -20,7 +20,7 @@ type Session = {
   items: Item[];
 };
 
-export default function RhythmResult() {
+function RhythmResultInner() {
   // ① クエリはクライアントで取得
   const sp = useSearchParams();
   const total = Number(sp.get("total") ?? 0);
@@ -191,5 +191,14 @@ export default function RhythmResult() {
         </CardContent>
       </Card>
     </Container>
+  );
+}
+
+// CSR フォールバックを明示（next export対策）
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="p-6 opacity-70">結果を読み込み中…</div>}>
+      <RhythmResultInner />
+    </Suspense>
   );
 }

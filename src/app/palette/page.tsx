@@ -139,8 +139,8 @@ export default function PalettePage() {
 
                   <TabsContent value="rhythm" className="mt-4">
                     <ActionsRow>
-                       <Button block>リズムを始める</Button>
-                       <Button variant="surface" block>練習</Button>
+                       <Button >リズムを始める</Button>
+                       <Button variant="surface" >練習</Button>
                     </ActionsRow>
                   </TabsContent>
 

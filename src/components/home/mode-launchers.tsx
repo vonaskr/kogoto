@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 export function ModeLaunchers() {
   return (
-    <Card >
+    <Card>
       <CardHeader className="pb-0">
         <CardTitle>学習をはじめる</CardTitle>
       </CardHeader>

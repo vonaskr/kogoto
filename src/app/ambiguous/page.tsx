@@ -311,7 +311,7 @@ export default function Ambiguous() {
   return (
     <Container>
       {view === "consent" ? (
-        <Card pressable={false}>
+        <Card>
           <CardContent className="p-6 md:p-8">
             <h1 className="h1-fluid mb-3">カメラを使いますか？</h1>
             <p className="opacity-80 mb-4">
@@ -334,7 +334,7 @@ export default function Ambiguous() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* 出題カード */}
-          <Card pressable={false}>
+          <Card>
             <CardContent className="p-6 md:p-8">
               <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -410,34 +410,34 @@ export default function Ambiguous() {
                   );
                 })}
               </div>
-            {/* 判定スロット（常設の下段エリア） */}
-            <div className="mt-4 h-24 md:h-28 grid place-items-center">
-              {judgeMark && (
-                <div
-                  className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)]
+              {/* 判定スロット（常設の下段エリア） */}
+              <div className="mt-4 h-24 md:h-28 grid place-items-center">
+                {judgeMark && (
+                  <div
+                    className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)]
                              bg-[color-mix(in_srgb,var(--card)_85%,var(--background))]
                              px-6 py-3 text-center shadow-[var(--shadow-strong)]"
-                >
-                  <div
-                    className="text-[min(18vw,110px)] font-extrabold animate-scaleIn leading-none"
-                    style={{ color: judgeMark === "ok" ? "var(--primary)" : "var(--accent)" }}
                   >
-                    {judgeMark === "ok" ? "○" : "×"}
-                  </div>
-                  {current && (
-                    <div className="mt-1 text-base md:text-xl font-semibold"
-                         style={{ color: "var(--foreground)" }}>
-                      {current.meanings?.[0] ?? ""}
+                    <div
+                      className="text-[min(18vw,110px)] font-extrabold animate-scaleIn leading-none"
+                      style={{ color: judgeMark === "ok" ? "var(--accent_pink)" : "var(--accent)" }}
+                    >
+                      {judgeMark === "ok" ? "○" : "×"}
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                    {current && (
+                      <div className="mt-1 text-base md:text-xl font-semibold"
+                        style={{ color: "var(--foreground)" }}>
+                        {current.meanings?.[0] ?? ""}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
           {/* カメラカード */}
-          <Card pressable={false}>
+          <Card>
             <CardContent className="p-6 md:p-8">
               <div className="mb-3 flex items-center justify-between">
                 <div className="font-semibold">カメラ</div>
