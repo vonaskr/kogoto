@@ -57,12 +57,13 @@ function RhythmPlayInner()  {
   useEffect(()=>{ idxRef.current = idx; }, [idx]);
   useEffect(()=>{ phaseRef.current = phase; }, [phase]);
   const [matchInfo, setMatchInfo] = useState<{
-  spokenRaw: string;
-  spokenNorm: string;
-  rule: 'number'|'reading'|'none';
-  matchedIndex: number|null;  // 0-based
-  note?: string;
-}|null>(null);
+    spokenRaw: string;
+    spokenNorm: string;
+    rule: 'number'|'reading'|'none';
+    matchedIndex: number|null;  // 0-based
+    note?: string;
+    tokensByChoice: string[][]; // ← デバッグ表示用
+  } | null>(null);
   const [debugRhythm, setDebugRhythm] = useState(false);
   const [lastDeltaMs, setLastDeltaMs] = useState<number | null>(null);
   const [lastGrade, setLastGrade] = useState<'perfect'|'great'|'good'|'miss'|null>(null);
@@ -182,6 +183,7 @@ function RhythmPlayInner()  {
     rule: res.rule,
     matchedIndex: res.matchedIndex,
     note: res.note,
+    tokensByChoice: q.choices.map((c) => choiceTokens(c)),
   });
 
   if (res.matchedIndex == null) return;
@@ -418,28 +420,29 @@ function RhythmPlayInner()  {
                   <span className="opacity-70">待機中… {noAnswerMsg && <em>{noAnswerMsg}</em>}</span>
                 )}
               </div>
-              {debugVoice && (
+              {debugVoice && matchInfo && (
                 <div className="text-xs mb-3 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]">
                   <div>interim: <span className="opacity-70">{interimText || "（なし）"}</span></div>
                   <div>error: <span className="opacity-70">{voiceErr || "（なし）"}</span></div>
                   <div>permission: <span className="opacity-70">{micPerm}</span></div>
-                                    {matchInfo && (
-                    <div className="mt-2">
-                      <div>rule: <b>{matchInfo.rule}</b> / note: {matchInfo.note || "—"}</div>
-                      <div>spoken(norm): <code>{matchInfo.spokenNorm}</code></div>
-                      <div className="mt-1">
-                        tokens:
-                        <ol className="list-decimal ml-5">
-                          {matchInfo.tokensByChoice.map((toks, i) => (
-                            <li key={i}>
-                              {toks.map((t, j) => <code key={j} className="mr-1">{t}</code>)}
-                              {matchInfo.matchedIndex === i && <span> ← match</span>}
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
+                  <div className="mt-2">
+                    <div>rule: <b>{matchInfo.rule}</b> / note: {matchInfo.note || "—"}</div>
+                    <div>spoken(norm): <code>{matchInfo.spokenNorm}</code></div>
+                    <div className="mt-1">
+                      tokens:
+                      <ol className="list-decimal ml-5">
+                         {matchInfo.tokensByChoice.map((toks: string[], i: number) => (
+                          <li key={i}>
+                            {toks.map((t: string, j: number) => (
+                              <code key={j} className="mr-1">{t}</code>
+                            ))}
+                            {matchInfo.matchedIndex === i && <span> ← match</span>}
+                          </li>
+                        ))}
+                      </ol>
                     </div>
-                  )}
+                  </div>
+                  
                   <button
                     className="mt-1 px-2 py-0.5 rounded border"
                     onClick={async () => {
