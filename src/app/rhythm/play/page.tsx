@@ -166,13 +166,10 @@ function RhythmPlayInner()  {
 
   // 音声結果ハンドラ：タイミング(±ms)＋内容一致 → judgeNow()
     const onVoice = (spoken: { normalized: string; confidence: number; at: number }) => {
-    // フェーズずれ・前問の遅延イベントは無視
-    if (!q || phaseRef.current !== "choices" || judgedThisCycleRef.current) return;
-
-    // 低信頼は無視（緩め）
-    if (spoken.confidence < 0.5) return;
-    setLastHeard(spoken.normalized);
-    // 内容一致（デバッグ付きマッチャ）
+    if (!q || phase !== "choices" || judgedThisCycleRef.current) return;
+    // 低信頼は一旦捨てる（まず「未回答地獄」回避を優先）
+    if (spoken.confidence < 0.3) return;
+    // 内容一致（番号→キーワード）
     const res = tryMatch(spoken.normalized, heardFinal || heardInterim, q.choices);
     setMatchInfo({
       spokenRaw: heardFinal || heardInterim || '',
@@ -182,15 +179,15 @@ function RhythmPlayInner()  {
       tokensByChoice: res.tokensByChoice,
       note: res.note,
     });
-    if (res.matchedIndex == null) return; // 内容不一致 → 何もしない
-    // 一致したので即判定（内容のみ）。色付けのため選択も反映
-    setSelected(res.matchedIndex);
-    setLastDeltaMs(null); setLastGrade(null); // タイミング評価は使わない
+    if (res.matchedIndex == null) return;             // 何も合ってない
+    setSelected(res.matchedIndex);                    // まずUIに反映（ボタンと同じ）
     sfx.click();
-    judgeNow(res.matchedIndex === q.answer);
+    // ★タイミングは見ない：8拍内で内容一致なら正解
+    const ok = (res.matchedIndex === q.answer);
+    judgeNow(ok);
   };
 
-    // --- マッチャ（番号 → キーワードの順で判定） -----------------------
+  // --- マッチャ（番号 → キーワードの順で判定） -----------------------
   const numWordToIndex = (t: string): number | null => {
     const m = t.match(/([1-4])ばん?$/); // 例: "2番"
     if (m) return Number(m[1]) - 1;
@@ -271,11 +268,9 @@ function RhythmPlayInner()  {
       setHeardFinal("");
     }
 
-    if (b === 8 && !judgedThisCycleRef.current) {
-      // 未回答 ×。聞こえなかった旨を表示（その問に限り）
-      if (selected == null && !heardInterim && !heardFinal) {
-        setNoAnswerMsg("（聞き取り・回答なし）");
-      }
+  if (b === 8 && !judgedThisCycleRef.current) {
+      // 8拍経過しても確定なし → 未回答
+      setHeardFinal((prev) => prev || "（聞き取り不可／解答なし）");
       judgeNow(false);
     }
   });

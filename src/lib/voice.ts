@@ -33,11 +33,14 @@ export function voiceSupported(): boolean {
 // マイク権限を要求
 export async function warmupMic(): Promise<boolean> {
   try {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return false;
+    // HTTPS + ユーザー操作直後で呼ぶこと
+    if (!navigator.mediaDevices?.getUserMedia) return false;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(t => t.stop());
+    // 取得できたら即停止（権限だけ確保）
+    stream.getTracks().forEach((t) => { try { t.stop(); } catch {} });
     return true;
-  } catch (e: any) {
+  } catch (e: unknown) {
+    // NotAllowedError / NotFoundError などを静かに false へ
     return false;
   }
 }
