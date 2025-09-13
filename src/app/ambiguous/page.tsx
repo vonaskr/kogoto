@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Container } from "@/components/layout/container";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -270,25 +270,6 @@ export default function Ambiguous() {
     };
     itemsRef.current.push(item);
   }
-
-  function finalizeSession() {
-    const items = itemsRef.current;
-    if (!items.length) return null;
-    const correctN = items.filter((it: AmbItem) => it.correct).length;
-    const wrongIds = items.filter((it: AmbItem) => !it.correct).map((it) => it.vocabId);
-    saveSession({
-      id: `${Date.now()}`,
-      startedAt: Date.now(),
-      items,
-      correctRate: items.length ? correctN / items.length : 0,
-      comboMax,
-      earnedPoints: correctN, // ひとまず正解数=ポイント
-      wrongIds,
-    });
-    itemsRef.current = []; // クリア
-    return { total: items.length, correct: correctN, streak: comboMax };
-  }
-
 
   // 即時発話：設問が見えた直後に読み上げ
   useEffect(() => {
