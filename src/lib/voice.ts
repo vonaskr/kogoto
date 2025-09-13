@@ -1,3 +1,5 @@
+import type { SpeechRecognitionConstructor } from "@/types/speech";
+
 // Web Speech API の最小ラッパ（連続認識）
 export type VoiceResult = {
   text: string;
@@ -47,21 +49,30 @@ export async function warmupMic(): Promise<boolean> {
 // 権限状態の確認（Permissions API）
 export async function getMicPermissionState(): Promise<'granted'|'denied'|'prompt'|'unsupported'> {
   try {
-    // 一部ブラウザでは 'microphone' が未サポート
-    // @ts-ignore
-    if (!navigator.permissions?.query) return 'unsupported';
-    // @ts-ignore
-    const st = await navigator.permissions.query({ name: 'microphone' as any });
-    return (st?.state as any) ?? 'unsupported';
+    // 一部ブラウザは Permissions 未対応
+    const perms = (navigator as unknown as { permissions?: { query(desc: PermissionDescriptor): Promise<PermissionStatus> } }).permissions;
+    if (!perms?.query) return 'unsupported';
+    // 型に 'microphone' が無い環境があるため、PermissionDescriptor として問い合わせ
+    const st = await perms.query({ name: 'microphone' as PermissionName });
+    return st?.state ?? 'unsupported';
   } catch {
     return 'unsupported';
   }
 }
 
+function getSR(): SpeechRecognitionConstructor | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
 export function startVoice(opts: Opts = {}) {
   if (!voiceSupported()) return false;
 
-  const SR = (window.SpeechRecognition ?? (window as any).webkitSpeechRecognition) as typeof SpeechRecognition;
+  const SR = getSR();
   if (!SR) return false;
   const r = new SR();   // ← 型は推論で SpeechRecognition
   r.lang = opts.lang ?? "ja-JP";
@@ -79,9 +90,23 @@ export function startVoice(opts: Opts = {}) {
     opts.onResult?.({ text, normalized, confidence, at: performance.now() });
   };
 
-    r.onerror = (ev: any) => {
-    // 可能なら error/message/type から読み取り、人間可読の文字列にする
-    const msg = (ev && (ev.error || ev.message || ev.type)) ? String(ev.error || ev.message || ev.type) : 'unknown';
+     r.onstart = () => {
+    // iOS/Safari などで onstart をトリガにUI状態更新したい場合に利用可
+  };
+
+  r.onaudiostart = () => {
+    // 途中経過が欲しければ onresult 分岐で isFinal=false を拾って opts.onInterim を呼ぶ
+  };
+
+  r.onerror = (ev: SpeechRecognitionErrorEvent | Event) => {
+    let msg = 'unknown';
+    if (typeof (ev as SpeechRecognitionErrorEvent).error === 'string') {
+      msg = String((ev as SpeechRecognitionErrorEvent).error);
+    } else if (typeof (ev as SpeechRecognitionErrorEvent).message === 'string') {
+      msg = String((ev as SpeechRecognitionErrorEvent).message);
+    } else if (typeof ev.type === 'string') {
+      msg = ev.type;
+    }
     opts.onError?.(msg);
   };
   r.onend = () => console.log("SpeechRecognition ended");

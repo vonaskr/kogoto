@@ -2,8 +2,14 @@
 // MediaPipe Tasks Vision を使って、表情スコア（smile/frownの近似）をストリームで返す薄いAPI。
 // 注意: 送信なし・ブラウザ内完結。UI側はこれを購読し、EMA/閾値で確定判定を行う。
 
-let vision: any;
-let landmarker: any;
+import type {
+  FaceLandmarker,
+  FaceLandmarkerResult,
+  FilesetResolver,
+} from "@mediapipe/tasks-vision";
+
+let vision: typeof import("@mediapipe/tasks-vision") | null = null;
+let landmarker: FaceLandmarker | null = null;
 let running = false;
 let rafId: number | null = null;
 
@@ -18,19 +24,24 @@ export async function initFace() {
   if (vision && landmarker) return;
   const mp = await import("@mediapipe/tasks-vision");
   vision = mp;
-  const wasmPath = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
- // Mediapipe が INFO を stderr に流すため Next の赤Nが点く → 既知文言のみ握りつぶし
+  const wasmPath =
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+
+  // Mediapipe が INFO を stderr に流すため Next の赤Nが点く → 既知文言のみ握りつぶし
   const origErr = console.error;
-  console.error = (msg?: any, ...rest: any[]) => {
+  console.error = (msg?: unknown, ...rest: unknown[]) => {
     const text = String(msg ?? "");
     if (
       text.includes("Created TensorFlow Lite XNNPACK delegate for CPU.") ||
-      text.includes("Feedback manager requires a model with a single signature inference")
+      text.includes(
+        "Feedback manager requires a model with a single signature inference"
+      )
     ) {
       return console.debug("[mediapipe]", text, ...rest);
     }
     return origErr(msg, ...rest);
   };
+
   const fileset = await mp.FilesetResolver.forVisionTasks(wasmPath);
   landmarker = await mp.FaceLandmarker.createFromOptions(fileset, {
     baseOptions: {
@@ -41,12 +52,12 @@ export async function initFace() {
     numFaces: 1,
     outputFacialTransformationMatrixes: true,
   });
-  console.error = origErr; 
+  console.error = origErr;
 }
 
 export function startFaceStream(
   video: HTMLVideoElement,
-  { onScore, fps = 20, inputSize = 128 }: Options
+  { onScore, fps = 20 }: Options
 ) {
   if (!landmarker) throw new Error("call initFace() first");
   if (running) return;
@@ -63,22 +74,28 @@ export function startFaceStream(
       lastTs = t;
 
       // フレーム準備ガード（メタデータ未読み込み・サイズ0はスキップ）
-      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+      if (
+        !video ||
+        video.readyState < 2 ||
+        !video.videoWidth ||
+        !video.videoHeight
+      ) {
         onScore({ smile: 0.5, frown: 0.5 });
         return;
       }
-      let result: any;
+      let result: FaceLandmarkerResult | null = null;
       try {
         // MediaPipeにvideoフレームを渡してランドマーク検出
         result = await landmarker.detectForVideo(video, performance.now());
-      } catch (e: any) {
+      } catch (e) {
         // 稀に内部例外が投げられるので握りつぶさずスキップ
-        console.warn("detectForVideo error:", e?.name, e?.message || e);
+        const err = e as Error;
+        console.warn("detectForVideo error:", err.name, err.message);
         onScore({ smile: 0.5, frown: 0.5 });
         return;
       }
 
-      // ランドマークが無ければ「中立」に近いスコアを返す（UI側でタイムアウト丸め）
+      // ランドマークが無ければ「中立」に近いスコアを返す
       if (!result?.faceLandmarks?.length) {
         onScore({ smile: 0.5, frown: 0.5 });
         return;
@@ -87,18 +104,20 @@ export function startFaceStream(
       const lm = result.faceLandmarks[0]; // 468点（Face Mesh相当）
 
       // --- 超簡易の表情近似指標 ---
-      // smile: 口角の横開き＋口角の上がり（左右）
-      // frown: 眉間距離の縮み＋眉の下がり
-      // ※ 厳密な感情分類ではなく、POS/NEG 二値に足る連続指標を作るのが目的
       const get = (i: number) => lm[i];
 
-      // インデックスは MediaPipe Face Mesh に準拠（口角/眉間付近の代表点）
-      // 口角（左=61, 右=291）・上唇中央(13)・下唇中央(14)
-      const pL = get(61), pR = get(291), pUp = get(13), pDn = get(14);
-      // 眉間（左=67, 右=297）・鼻根(6)・顎先(152)
-      const bL = get(67), bR = get(297), nose = get(6), chin = get(152);
+      // インデックスは MediaPipe Face Mesh に準拠
+      const pL = get(61),
+        pR = get(291),
+        pUp = get(13),
+        pDn = get(14);
+      const bL = get(67),
+        bR = get(297),
+        nose = get(6),
+        chin = get(152);
 
-      const dist = (a: any, b: any) => Math.hypot(a.x - b.x, a.y - b.y);
+      const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+        Math.hypot(a.x - b.x, a.y - b.y);
 
       // 正規化用の顔スケール（鼻根-顎）
       const faceScale = Math.max(1e-6, dist(nose, chin));
@@ -110,26 +129,25 @@ export function startFaceStream(
       // 眉間の狭さ（怒り寄り）
       const browGap = dist(bL, bR) / faceScale;
 
-      // 口角の“上がり”（口角と鼻根のy差分の平均：上がると負値→スコア化で反転）
+      // 口角の“上がり”
       const avgCornerLift =
-        ((pL.y + pR.y) / 2 - nose.y) / Math.max(1e-6, (chin.y - nose.y));
+        ((pL.y + pR.y) / 2 - nose.y) / Math.max(1e-6, chin.y - nose.y);
 
-      // スコア設計（0..1 に収めるためのシグモイド近似）
       const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-      // 笑顔: 横開き↑ + 縦開き少し↑ + 口角上がり
+      // 笑顔スコア
       let smile =
         0.6 * norm(mouthW, 0.25, 0.6) +
         0.2 * norm(mouthH, 0.02, 0.18) +
-        0.2 * norm(-avgCornerLift, -0.15, 0.15); // 口角が上がる(負)→スコア↑
+        0.2 * norm(-avgCornerLift, -0.15, 0.15);
 
-      // しかめ面: 眉間狭い + 口縦開きは小さめ
+      // しかめ面スコア
       let frown =
-        0.7 * norm(0.12 - browGap, -0.05, 0.12) + // 小さいほど↑
+        0.7 * norm(0.12 - browGap, -0.05, 0.12) +
         0.3 * (1 - norm(mouthH, 0.02, 0.18));
 
-      // 口を大きく開けている場合はネガ寄りに補助（悲しい顔作りづらさの救済）
-      const mouthOpenBoost = norm(mouthH, 0.22, 0.45); // 0.22〜で徐々に効く
+      // 口を大きく開けている場合はネガ寄りに補助
+      const mouthOpenBoost = norm(mouthH, 0.22, 0.45);
       frown = Math.max(frown, mouthOpenBoost);
 
       smile = clamp01(smile);
@@ -154,12 +172,12 @@ export async function disposeFace() {
   stopFaceStream();
   try {
     await landmarker?.close();
-  } catch { }
+  } catch {}
   landmarker = null;
   vision = null;
 }
 
-// 線形正規化の簡易関数：値vが[a,b]にあるとき0..1へ（外側ははみ出さない）
+// 線形正規化の簡易関数
 function norm(v: number, a: number, b: number) {
   if (a === b) return 0.5;
   const t = (v - a) / (b - a);
