@@ -215,3 +215,18 @@ export async function loadVocabCsv(path: string): Promise<Vocab[]> {
 
   return out;
 }
+
+// /src/lib/voice.ts など共通ユーティリティに
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iP(hone|ad|od)/.test(navigator.platform) ||
+         (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+}
+
+export function srSupported(): boolean {
+  // iOSは常に false、PCで webkitSpeechRecognition / SpeechRecognition を見る
+  if (isIOS()) return false;
+  const w = window as any;
+  return !!(w.webkitSpeechRecognition || w.SpeechRecognition);
+}
+
