@@ -11,6 +11,19 @@ export default function VoiceTranscribePage() {
   const [result, setResult] = useState<string>("");
   const [interim, setInterim] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [micPerm, setMicPerm] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
+
+  const requestMicPermission = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      setMicPerm('granted');
+      setError('');
+    } catch (e: any) {
+      setMicPerm('denied');
+      setError('マイクがブロックされています。🔒→サイトの設定から許可してください。');
+    }
+  };
 
   const handleStart = () => {
     if (!voiceSupported()) {
@@ -43,6 +56,10 @@ export default function VoiceTranscribePage() {
         <CardContent className="p-6 md:p-8">
           <h1 className="h1-fluid mb-4">日本語音声 → 文字起こし</h1>
           <p className="mb-6 opacity-80">マイクで話した内容がリアルタイムで文字になります。</p>
+          <div className="mb-2">
+            <Button onClick={requestMicPermission}>マイク許可をリクエスト</Button>
+            <span className="ml-2 text-xs opacity-70">状態: {micPerm}</span>
+          </div>
           <div className="flex gap-2 mb-4">
             {!listening ? (
               <Button onClick={handleStart}>音声認識スタート</Button>
