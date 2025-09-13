@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Container } from "@/components/layout/container";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,7 +22,7 @@ const DEFAULT_BPM = 90;
 
 type Phase = "ready" | "prompt" | "choices" | "judge" | "interlude";
 
-export default function RhythmPlay() {
+function RhythmPlayInner()  {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -497,5 +497,14 @@ export default function RhythmPlay() {
         </CardContent>
       </Card>
     </Container>
+  );
+}
+export default function Page() {
+  return (
+    <Suspense fallback={
+      <div className="p-6 opacity-70">ロード中…</div>
+    }>
+      <RhythmPlayInner />
+    </Suspense>
   );
 }
