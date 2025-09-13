@@ -420,7 +420,7 @@ export default function Ambiguous() {
                   >
                     <div
                       className="text-[min(18vw,110px)] font-extrabold animate-scaleIn leading-none"
-                      style={{ color: judgeMark === "ok" ? "var(--primary)" : "var(--accent)" }}
+                      style={{ color: judgeMark === "ok" ? "var(--accent_pink)" : "var(--accent)" }}
                     >
                       {judgeMark === "ok" ? "○" : "×"}
                     </div>

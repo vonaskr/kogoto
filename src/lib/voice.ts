@@ -41,46 +41,51 @@ export async function warmupMic(): Promise<boolean> {
     return false;
   }
 }
+// 権限状態の確認（Permissions API）
+export async function getMicPermissionState(): Promise<'granted'|'denied'|'prompt'|'unsupported'> {
+  try {
+    // 一部ブラウザでは 'microphone' が未サポート
+    // @ts-ignore
+    if (!navigator.permissions?.query) return 'unsupported';
+    // @ts-ignore
+    const st = await navigator.permissions.query({ name: 'microphone' as any });
+    return (st?.state as any) ?? 'unsupported';
+  } catch {
+    return 'unsupported';
+  }
+}
 
 export function startVoice(opts: Opts = {}) {
   if (!voiceSupported()) return false;
-  // コンストラクタの型を明示
-  const SR = (window.SpeechRecognition || (window as any).webkitSpeechRecognition) as { new(): SpeechRecognition };
-  const r: SpeechRecognition = new SR();   // ← ローカルに確定型で保持
-  r.lang = opts.lang ?? 'ja-JP';
+
+  const SR = (window.SpeechRecognition ?? (window as any).webkitSpeechRecognition) as typeof SpeechRecognition;
+  if (!SR) return false;
+  const r = new SR();   // ← 型は推論で SpeechRecognition
+  r.lang = opts.lang ?? "ja-JP";
   r.continuous = true;
   r.interimResults = true;
-  const autoRestart = opts.autoRestart ?? true;
+  r.maxAlternatives = 5;
 
-  r.onresult = (e: any) => {
+  r.onresult = (e: SpeechRecognitionEvent) => {
     const last = e.results?.[e.results.length - 1];
-    if (!last) return;
-    // interim
-    if (!last.isFinal) {
-      const alt0 = last[0];
-      const txt = String(alt0?.transcript ?? '').trim();
-      if (txt) opts.onInterim?.(txt);
-      return;
-    }
-    // final
+    if (!last?.isFinal) return;
     const alt = last[0];
-    const text = String(alt?.transcript ?? '').trim();
+    const text = String(alt?.transcript ?? "").trim();
     const normalized = normalizeJa(text);
     const confidence = Number(alt?.confidence ?? 0);
     opts.onResult?.({ text, normalized, confidence, at: performance.now() });
   };
-  r.onerror = (ev: any) => {
-    const msg = String(ev?.error ?? 'unknown');
+
+    r.onerror = (ev: any) => {
+    // 可能なら error/message/type から読み取り、人間可読の文字列にする
+    const msg = (ev && (ev.error || ev.message || ev.type)) ? String(ev.error || ev.message || ev.type) : 'unknown';
     opts.onError?.(msg);
   };
-  r.onend = () => {
-    // マイクが切れがちな環境向け: 自動で復帰
-    if (autoRestart) {
-      try { r.start(); } catch {}
-    }
-  };
+  r.onend = () => console.log("SpeechRecognition ended");
+
   try { r.start(); } catch {}
-  rec = r; // 最後に保存
+
+  rec = r;
   return true;
 }
 
