@@ -103,10 +103,11 @@ function RhythmPlayInner()  {
   }, []);
 
   const q = qs[idx];
+  // マッチ用データは label とトークン（本文＋括弧内読みの正規化）だけで判定する
   const choicesForMatch = q
-    ? q.choices.map((label, i) => ({
+    ? q.choices.map((label) => ({
         label,
-        reading: (q as any).choiceReadings?.[i],
+        tokens: choiceTokens(label), // 正規化済トークン配列
       }))
     : [];
   const progress = qs.length ? (idx / qs.length) * 100 : 0;
@@ -225,23 +226,25 @@ function RhythmPlayInner()  {
     if (m?.[1]) tokens.add(normalizeJa(m[1]));
     return Array.from(tokens);
   };
-  // 読み or 数字でマッチ（正規化しない）
-  // mean_reading 列からマッチ判定
-  const tryMatch = (spoken: string, choices: { label: string; reading?: string }[]) => {
-  // 1) 数字（1/2/3/4, 1番〜4番, いち/に/さん/よん…）
-  const num = numWordToIndex(spoken);
-  if (num != null && num >= 0 && num < choices.length) {
-    return { rule: "number" as const, matchedIndex: num, note: "番号一致" };
-  }
-  // 2) mean_reading 完全一致（前後空白は除去）
-  const spokenTrim = spoken.trim();
-  const ix = choices.findIndex(c => (c.reading?.trim() || "") === spokenTrim);
-  if (ix >= 0) {
-    return { rule: "reading" as const, matchedIndex: ix, note: "読み一致" };
-  }
-  // 3) 不一致
-  return { rule: "none" as const, matchedIndex: null, note: "不一致" };
-};
+    // 数字 or トークン一致でマッチ（spoken は非正規化文字列でも来るため中で正規化）
+  const tryMatch = (
+    spoken: string,
+    choices: { label: string; tokens: string[] }[]
+  ) => {
+    // 1) 数字（1/2/3/4, 1番〜4番, いち/に/さん/よん…）
+    const num = numWordToIndex(spoken);
+    if (num != null && num >= 0 && num < choices.length) {
+      return { rule: "number" as const, matchedIndex: num, note: "番号一致" };
+    }
+    // 2) トークン一致（本文 or 括弧内読みの正規化済みトークンに一致）
+    const norm = normalizeJa(spoken);
+    const ix = choices.findIndex(c => c.tokens.includes(norm));
+    if (ix >= 0) {
+      return { rule: "reading" as const, matchedIndex: ix, note: "読み/トークン一致" };
+    }
+    // 3) 不一致
+    return { rule: "none" as const, matchedIndex: null, note: "不一致" };
+  };
 
 
   // メトロノーム
@@ -328,7 +331,7 @@ function RhythmPlayInner()  {
       if (idxRef.current !== idx || phaseRef.current !== "choices") return;
       setHeardFinal(r.text);
       onVoice({
-        normalized: r.text, // ← そのまま渡す
+        normalized: r.normalized, // ← 正規化済みを渡す
         confidence: r.confidence,
         at: r.at,
       });
