@@ -3,11 +3,15 @@
 
 let ctx: AudioContext | null = null;
 
-function ensureCtx() {
-  if (!ctx) ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  // iOSなどで必要な場合は resume
-  if (ctx.state === "suspended") ctx.resume();
-  return ctx!;
+type AudioContextCtor = { new(): AudioContext };
+function getAudioContextCtor(): AudioContextCtor {
+  const w = window as unknown as { webkitAudioContext?: AudioContextCtor };
+  return (window.AudioContext ?? w.webkitAudioContext!) as AudioContextCtor;
+}
+function ensureCtx(): AudioContext {
+  if (!ctx) ctx = new (getAudioContextCtor())();
+  if (ctx.state === "suspended") void ctx.resume();
+  return ctx;
 }
 
 function beep(freq: number, durMs = 90, type: OscillatorType = "sine", gain = 0.05) {
@@ -16,7 +20,7 @@ function beep(freq: number, durMs = 90, type: OscillatorType = "sine", gain = 0.
   const osc = ac.createOscillator();
   const g = ac.createGain();
   osc.type = type;
-  osc.frequency.value = freq;
+  osc.frequency.setValueAtTime(freq, now);
   g.gain.value = gain;
   osc.connect(g).connect(ac.destination);
   osc.start(now);
