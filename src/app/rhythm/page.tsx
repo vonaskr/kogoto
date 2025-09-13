@@ -8,6 +8,7 @@ export default function RhythmHub() {
     <Container>
       <Card>
         <CardContent className="p-6 md:p-8">
+          <Link href="/voice-transcribe">文字起こしページ</Link>
           <h1 className="h1-fluid mb-4">リズム学習（ハブ）</h1>
           <p className="mb-6 opacity-80">通常／復習のどちらかを選んで開始します。</p>
           <div className="flex flex-col sm:flex-row gap-3">
