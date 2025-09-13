@@ -57,13 +57,12 @@ function RhythmPlayInner()  {
   useEffect(()=>{ idxRef.current = idx; }, [idx]);
   useEffect(()=>{ phaseRef.current = phase; }, [phase]);
   const [matchInfo, setMatchInfo] = useState<{
-    spokenRaw: string;
-    spokenNorm: string;
-    rule: 'number'|'keyword'|'none';
-    matchedIndex: number|null;  // 0-based
-    tokensByChoice: string[][];
-    note?: string;
-  }|null>(null);
+  spokenRaw: string;
+  spokenNorm: string;
+  rule: 'number'|'reading'|'none';
+  matchedIndex: number|null;  // 0-based
+  note?: string;
+}|null>(null);
   const [debugRhythm, setDebugRhythm] = useState(false);
   const [lastDeltaMs, setLastDeltaMs] = useState<number | null>(null);
   const [lastGrade, setLastGrade] = useState<'perfect'|'great'|'good'|'miss'|null>(null);
@@ -103,6 +102,12 @@ function RhythmPlayInner()  {
   }, []);
 
   const q = qs[idx];
+  const choicesForMatch = q
+    ? q.choices.map((label, i) => ({
+        label,
+        reading: (q as any).choiceReadings?.[i],
+      }))
+    : [];
   const progress = qs.length ? (idx / qs.length) * 100 : 0;
 
   // 判定処理（即時 or 自動）
@@ -168,22 +173,25 @@ function RhythmPlayInner()  {
   if (!q || phase !== "choices" || judgedThisCycleRef.current) return;
   if (spoken.confidence < 0.3) return;
 
-  const res = tryMatch(heardFinal || heardInterim || "", q.choices);
+  const heardText = heardFinal || heardInterim || "";
+  const res = tryMatch(heardText, choicesForMatch);
+
   setMatchInfo({
-    spokenRaw: heardFinal || heardInterim || '',
+    spokenRaw: heardText,
     spokenNorm: spoken.normalized,
     rule: res.rule,
     matchedIndex: res.matchedIndex,
-    tokensByChoice: res.tokensByChoice,
     note: res.note,
   });
+
   if (res.matchedIndex == null) return;
 
   setSelected(res.matchedIndex);
   sfx.click();
-  const ok = (res.matchedIndex === q.answer); // タイミングは見ない（8拍内の仕様）
+  const ok = (res.matchedIndex === q.answer);
   judgeNow(ok);
 };
+
 
 
   // 数字ワード対応
@@ -218,18 +226,20 @@ function RhythmPlayInner()  {
   // 読み or 数字でマッチ（正規化しない）
   // mean_reading 列からマッチ判定
   const tryMatch = (spoken: string, choices: { label: string; reading?: string }[]) => {
-    const num = numWordToIndex(spoken);
-    if (num != null && num < choices.length) {
-      return { rule: "number" as const, matchedIndex: num, note: "番号一致" };
-    }
-    const ix = choices.findIndex(
-      (c) => c.reading && c.reading.trim() === spoken.trim()
-    );
-    if (ix >= 0) {
-      return { rule: "reading" as const, matchedIndex: ix, note: "読み一致" };
-    }
-    return { rule: "none" as const, matchedIndex: null, note: "不一致" };
-  };
+  // 1) 数字（1/2/3/4, 1番〜4番, いち/に/さん/よん…）
+  const num = numWordToIndex(spoken);
+  if (num != null && num >= 0 && num < choices.length) {
+    return { rule: "number" as const, matchedIndex: num, note: "番号一致" };
+  }
+  // 2) mean_reading 完全一致（前後空白は除去）
+  const spokenTrim = spoken.trim();
+  const ix = choices.findIndex(c => (c.reading?.trim() || "") === spokenTrim);
+  if (ix >= 0) {
+    return { rule: "reading" as const, matchedIndex: ix, note: "読み一致" };
+  }
+  // 3) 不一致
+  return { rule: "none" as const, matchedIndex: null, note: "不一致" };
+};
 
 
   // メトロノーム
