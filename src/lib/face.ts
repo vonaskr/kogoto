@@ -59,7 +59,9 @@ export function startFaceStream(
   video: HTMLVideoElement,
   { onScore, fps = 20 }: Options
 ) {
-  if (!landmarker) throw new Error("call initFace() first");
+  // landmarker をローカルへキャプチャして null 可能性を除去
+  const lmkr = landmarker;
+  if (!lmkr) throw new Error("call initFace() first");
   if (running) return;
   running = true;
 
@@ -86,7 +88,7 @@ export function startFaceStream(
       let result: FaceLandmarkerResult | null = null;
       try {
         // MediaPipeにvideoフレームを渡してランドマーク検出
-        result = await landmarker.detectForVideo(video, performance.now());
+        result = await lmkr.detectForVideo(video, performance.now());
       } catch (e) {
         // 稀に内部例外が投げられるので握りつぶさずスキップ
         const err = e as Error;

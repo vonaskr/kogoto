@@ -119,15 +119,17 @@ export default function Ambiguous() {
       });
       await videoRef.current.play();
 
-    } catch (e: any) {
-      console.error("Camera error:", e?.name, e?.message, e);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.error("Camera error:", err.name, err.message, err);
       setCamReady("error");
       return;
     }
     try {
       await initFace();
-    } catch (e: any) {
-      console.error("MediaPipe init error:", e?.name, e?.message, e);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.error("MediaPipe init error:", err.name, err.message, err);
       setCamReady("error");
       return;
     }
@@ -157,8 +159,9 @@ export default function Ambiguous() {
         inputSize: 128,
       });
       setCamReady("on");
-    } catch (e: any) {
-      console.error("Face stream error:", e?.name, e?.message, e);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.error("Face stream error:", err.name, err.message, err);
       setCamReady("error");
     }
   }
@@ -175,6 +178,25 @@ export default function Ambiguous() {
   }
 
   // ==== 出題プールロード & クリーンアップ ====
+    // finalizeSession を useCallback 化して依存関係を満たす
+  const finalizeSession = useCallback(() => {
+    const items = itemsRef.current;
+    if (!items.length) return null;
+    const correctN = items.filter((it: AmbItem) => it.correct).length;
+    const wrongIds = items.filter((it: AmbItem) => !it.correct).map((it) => it.vocabId);
+    saveSession({
+      id: `${Date.now()}`,
+      startedAt: Date.now(),
+      items,
+      correctRate: items.length ? correctN / items.length : 0,
+      comboMax,
+      earnedPoints: correctN,
+      wrongIds,
+    });
+    itemsRef.current = [];
+    return { total: items.length, correct: correctN, streak: comboMax };
+  }, [comboMax]);
+
   useEffect(() => {
     (async () => {
       const all = await loadVocabCsv("/vocab.csv");
@@ -189,7 +211,7 @@ export default function Ambiguous() {
       disposeFace();
       stopMetro();
     };
-  }, [stopMetro]);
+  }, [stopMetro, finalizeSession]);
 
   // ==== 手動ボタン決定 ====
   function decide(chosen: "pos" | "neg") {
@@ -271,7 +293,7 @@ export default function Ambiguous() {
   // 即時発話：設問が見えた直後に読み上げ
   useEffect(() => {
     if (current) speak(current.word, { lang: "ja-JP", rate: 0.95 });
-  }, [idx]);
+  }, [current]);
 
   // ==== 次の問題へ ====
   function next() {
