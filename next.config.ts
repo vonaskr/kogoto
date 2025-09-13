@@ -1,11 +1,15 @@
-import type { NextConfig } from "next";
-
-const nextConfig = {
-  output: "export",
-  images: { unoptimized: true },
-  eslint: {
-    ignoreDuringBuilds: true, 
+const nextConfig: import('next').NextConfig = {
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          // Permissions-Policy -> microphone=* に
+          { key: 'Permissions-Policy', value: 'microphone=*' },
+          
+        ],
+      },
+    ];
   },
-  turbopack: { root: __dirname }, 
 };
 export default nextConfig;
