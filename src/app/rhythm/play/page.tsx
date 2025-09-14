@@ -222,9 +222,7 @@ function RhythmPlayInner() {
       setNoAnswerMsg("");
       setHeardInterim("");
       setHeardFinal("");
-    }
-
-          // 🎤 ウォッチドッグ：choices 直後に無音が続けば 1 回だけ再起動
+            // 🎤（ここから）「prompt→choices」に入った瞬間“だけ”再起動系を仕込む
       heardSinceChoicesRef.current = false;
       choicesEnteredAtRef.current = performance.now();
       if (choicesRestartTimerRef.current) {
@@ -253,8 +251,9 @@ function RhythmPlayInner() {
           onError: (msg) => setVoiceErr(msg),
         });
         if (ok) setMicOn(true);
-      }, 1200); // 1.2s 無音なら再起動
-      // 2問目以降は 150ms 遅延の“明示再起動”を追加（初問のTTS競合を避けつつ安定化）
+      }, 1200); // 1.2s 無音なら再起動（保険）
+
+      // 2問目以降のみ：150ms遅延の明示再起動（初問TTS競合を避ける）
       if (idxRef.current > 0) {
         if (delayedRestartTimerRef.current) {
           clearTimeout(delayedRestartTimerRef.current);
@@ -283,6 +282,9 @@ function RhythmPlayInner() {
           if (ok) setMicOn(true);
         }, 150);
       }
+      // 🎤（ここまで）b===4内
+    }
+      
     // 自動×はしない（同一問題継続）
     if (b === 8 && phaseRef.current === "choices" && !judgedThisCycleRef.current) {
       setNoAnswerMsg("聞き取れませんでした。もう一度音声で回答してください。");
@@ -330,8 +332,9 @@ function RhythmPlayInner() {
   }, []);
 
   // スタート
-  const startPlay = async () => {
-    if (!q) return;
+    const startPlay = async () => {
+    if (isRunning) return;          // 二重起動防止
+    if (!q || loading) return;      // 問題未構築中は開始しない
 
     // 1) クリック直後に権限ダイアログ
     let granted = false;
