@@ -126,13 +126,15 @@ function RhythmResultInner() {
               <div className="text-3xl font-extrabold">{comboMax}</div>
             </div>
           </div>
+          {/*}
           <ul className="list-disc pl-5 space-y-1 mb-4">
             <li>正答数：{correct} / {total}</li>
             <li>正答率：{acc}%</li>
             <li>最大COMBO：{comboMax}</li>
             <li>今回の獲得：{earned || (correct*10 + (comboMax>=10?50:comboMax>=6?30:comboMax>=3?10:0))} pt</li>
-+           <li>所持ポイント：{points} pt</li>
+           <li>所持ポイント：{points} pt</li>
           </ul>
+          */}
 
           {/* 操作ボタン（統一UI） */}
           <div className="flex gap-3 mb-6">
