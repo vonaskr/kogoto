@@ -13,7 +13,6 @@ import { useMetronome } from "@/lib/use-metronome";
 import { speak } from "@/lib/tts";
 import { sfx } from "@/lib/sfx";
 import { startVoice, stopVoice, voiceSupported, warmupMic, getMicPermissionState } from "@/lib/voice";
-import { timingGrade } from "@/lib/judge";
 import { getLatencyOffset, calibrateOnce } from "@/lib/latency";
 import { saveSession, type SessionItem, getWrongWeights } from "@/lib/store";
 
@@ -26,7 +25,7 @@ function RhythmPlayInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const reviewMode = (sp.get("mode") === "review");
+  const reviewMode = sp.get("mode") === "review";
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -43,69 +42,66 @@ function RhythmPlayInner() {
   const [maxStreak, setMaxStreak] = useState(0);
   const justStartedRef = useRef(false);
 
-  const barBeatRef = useRef(0);              // 1..8 管理
-  const judgedThisCycleRef = useRef(false);  // 二重判定防止
-  const answerCenterAtRef = useRef<number>(0); // 声判定の中心時刻(ms)
+  const barBeatRef = useRef(0);
+  const judgedThisCycleRef = useRef(false);
+  const answerCenterAtRef = useRef<number>(0);
   const latencyRef = useRef<number>(0);
+
   const [micOn, setMicOn] = useState(false);
-  const [lastHeard, setLastHeard] = useState<string>(""); // ←（既存）正規化などの表示に使っていたら残す
-  const [heardInterim, setHeardInterim] = useState<string>(""); // 途中結果
-  const [heardFinal, setHeardFinal] = useState<string>("");     // 確定結果（人間可読）
-  const [noAnswerMsg, setNoAnswerMsg] = useState<string>("");   // 聞き取りなし/未回答の通知
-  const idxRef = useRef(0);           // 前問の結果が混ざらないためのガード
+  const [heardInterim, setHeardInterim] = useState<string>("");
+  const [heardFinal, setHeardFinal] = useState<string>("");
+  const [noAnswerMsg, setNoAnswerMsg] = useState<string>("");
+
+  const idxRef = useRef(0);
   const phaseRef = useRef<Phase>("ready");
   useEffect(() => { idxRef.current = idx; }, [idx]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
-  const [matchInfo, setMatchInfo] = useState<{
-    spokenRaw: string;
-    spokenNorm: string;
-    rule: 'number' | 'keyword' | 'none';
-    matchedIndex: number | null;  // 0-based
-    tokensByChoice: string[][];
-    note?: string;
-  } | null>(null);
+
   const [debugRhythm, setDebugRhythm] = useState(false);
-  const [lastDeltaMs, setLastDeltaMs] = useState<number | null>(null);
-  const [lastGrade, setLastGrade] = useState<'perfect' | 'great' | 'good' | 'miss' | null>(null);
   const [centerAtMs, setCenterAtMs] = useState<number | null>(null);
   const [debugVoice, setDebugVoice] = useState(false);
   const [interimText, setInterimText] = useState<string>("");
   const [voiceErr, setVoiceErr] = useState<string>("");
-  const [micPerm, setMicPerm] = useState<'granted' | 'denied' | 'prompt' | 'unsupported'>('unsupported');
+  const [micPerm, setMicPerm] =
+    useState<'granted' | 'denied' | 'prompt' | 'unsupported'>('unsupported');
 
-  // 辞書ロードと問題生成
+  // 参考表示用
+  const [matchInfo, setMatchInfo] = useState<{
+    spokenRaw: string;
+    spokenNorm: string;
+    rule: 'number' | 'keyword' | 'label' | 'none';
+    matchedIndex: number | null;
+    note?: string;
+  } | null>(null);
+
+  // 語彙ロード＆出題構成
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
         const vocab = await loadVocabCsv("/vocab.csv");
         if (!vocab.length) throw new Error("辞書が空です");
-        const weight = getWrongWeights(); // ★ 直近誤答の重み
+        const weight = getWrongWeights();
         const quiz = buildQuizSet(vocab, QUIZ_COUNT, weight, { reviewOnly: reviewMode });
         if (!quiz.length) {
-          if (reviewMode) {
-            throw new Error("復習対象がありません（誤答履歴が空です）");
-          } else {
-            throw new Error("問題が生成できませんでした");
-          }
-        } else {
-          setQs(quiz);
-          setIdx(0);
-          setPhase("ready");
-          setErr(null);
+          throw new Error(reviewMode ? "復習対象がありません（誤答履歴が空です）" : "問題が生成できませんでした");
         }
+        setQs(quiz);
+        setIdx(0);
+        setPhase("ready");
+        setErr(null);
       } catch (e: any) {
         setErr(e?.message ?? "読み込みに失敗しました");
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [reviewMode]);
 
   const q = qs[idx];
   const progress = qs.length ? (idx / qs.length) * 100 : 0;
 
-  // 判定処理（即時 or 自動）
+  // 判定
   const judgeNow = (ok: boolean) => {
     if (!q || judgedThisCycleRef.current) return;
     setPhase("judge");
@@ -116,7 +112,7 @@ function RhythmPlayInner() {
     setCorrect((x) => x + (ok ? 1 : 0));
     setStreak((s) => {
       const ns = ok ? s + 1 : 0;
-      setMaxStreak((m: number) => Math.max(m, ns));
+      setMaxStreak((m) => Math.max(m, ns));
       return ns;
     });
 
@@ -128,72 +124,9 @@ function RhythmPlayInner() {
       chosenText,
       correct: ok,
     });
-
-    /*
-    // 演出を見せてから次へ
-    setTimeout(() => {
-      if (idx + 1 < qs.length) {
-        setIdx((i) => i + 1);
-        setPhase("interlude");
-        barBeatRef.current = 0;
-        setSelected(null);
-      } else {
-        // 全問終了
-        const total = qs.length;
-        const nextStreakLocal = ok ? Math.max(maxStreak, streak + 1) : maxStreak;
-        const nextCorrectLocal = ok ? correct + 1 : correct;
-        stop();
-        const wrongIds = itemsRef.current.filter((it) => !it.correct).map((it) => it.vocabId);
-        saveSession({
-          id: String(Date.now()),
-          startedAt: startedAtRef.current,
-          items: itemsRef.current,
-          correctRate: total ? nextCorrectLocal / total : 0,
-          comboMax: nextStreakLocal,
-          earnedPoints: nextCorrectLocal * 10 + nextStreakLocal * 2,
-          wrongIds,
-        });
-        itemsRef.current = [];
-        startedAtRef.current = Date.now();
-        const p = new URLSearchParams({
-          total: String(total),
-          correct: String(nextCorrectLocal),
-          streak: String(nextStreakLocal),
-        });
-        router.push(`/rhythm/result?${p.toString()}`);
-      }
-    }, 380);
-    */
   };
 
-
-  const onVoice = (spoken: { normalized: string; confidence: number; at: number }) => {
-    if (!q || phase !== "choices" || judgedThisCycleRef.current) return;
-    if (spoken.confidence < 0.3) return;
-
-    const res = tryMatch(heardFinal || heardInterim || "", q.choices);
-    setMatchInfo({
-      spokenRaw: heardFinal || heardInterim || '',
-      spokenNorm: spoken.normalized,
-      rule: res.rule,
-      matchedIndex: res.matchedIndex,
-      tokensByChoice: res.tokensByChoice,
-      note: res.note,
-    });
-    if (res.matchedIndex == null) {
-    // 不一致：メッセージを出しつつ同一問題で待機（choices 維持）
-    setNoAnswerMsg("聞き取れませんでした。もう一度音声で回答してください。");
-    return;
-    }
-
-    setSelected(res.matchedIndex);
-    sfx.click();
-    const ok = (res.matchedIndex === q.answer); // タイミングは見ない（8拍内の仕様）
-    judgeNow(ok);
-  };
-
-
-  // 数字→インデックス（0-based）
+  // 数字→インデックス
   const numWordToIndex = (raw: string): number | null => {
     const t = raw.trim();
     const map: Record<string, number> = {
@@ -205,52 +138,64 @@ function RhythmPlayInner() {
     if (/^[1-4]番?$/.test(t)) return Number(t[0]) - 1;
     return (t in map) ? map[t] : null;
   };
-  // 各選択肢の「読み」を取り出す（当面：全角/半角カッコ内）
-  // 例: "墨で染めること（すみでそめること）" → ["すみでそめること"]
-  const choiceReadings = (label: string): string[] => {
-    const m = label.match(/[（(]([^）)]+)[)）]/);
-    return m?.[1] ? [m[1].trim()] : [];
-  };
 
-  const normalizeJa = (s: string) =>
-    s.toLowerCase()
-      .normalize('NFKC')
-      .replace(/[ぁ-ん]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60))
-      .replace(/[ー―−‐]/g, '-')
-      .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
-      .replace(/[\s、。・.,/\\|_*+~^$()[\]{}"'`!?@#:;<>-]/g, '');
-  const choiceTokens = (label: string): string[] => {
-    const tokens = new Set<string>();
-    const base = (label || '').trim();
-    if (!base) return [];
-    tokens.add(normalizeJa(base));
-    const m = base.match(/[（(]([^）)]+)[)）]/); // （よみ）補助
-    if (m?.[1]) tokens.add(normalizeJa(m[1]));
-    return Array.from(tokens);
-  };
-  // 読み or 数字でマッチ（正規化しない）
-  const tryMatch = (spokenRaw: string, choices: string[]) => {
-    // 1) 数字指定（いち/に/さん/よん も可）
+  // かな一致 → 数字 → ラベル一致（フォールバック）
+  const tryMatch = (
+    spokenRaw: string,
+    choices: string[],
+    choiceReadings: string[],
+  ): { rule: 'number' | 'keyword' | 'label' | 'none'; matchedIndex: number | null; note: string } => {
+    // 数字
     const num = numWordToIndex(spokenRaw);
     if (num != null && num >= 0 && num < choices.length) {
-      return { rule: 'number' as const, matchedIndex: num, tokensByChoice: choices.map(choiceReadings), note: '番号指定' };
+      return { rule: 'number', matchedIndex: num, note: '番号指定' };
     }
-    // 2) 読み指定（括弧内そのまま一致）
-    const tokensByChoice = choices.map(choiceReadings);
-    const ix = tokensByChoice.findIndex(tokens => tokens.some(tok => tok && tok === spokenRaw.trim()));
-    if (ix >= 0) return { rule: 'keyword' as const, matchedIndex: ix, tokensByChoice, note: '読み（括弧内）一致' };
+    // mean_reading（かな）
+    const kana = spokenRaw.trim();
+    const ixKana = choiceReadings.findIndex((r) => (r || '').trim() === kana);
+    if (ixKana >= 0) return { rule: 'keyword', matchedIndex: ixKana, note: 'mean_reading一致' };
 
-    // 3) 不一致
-    return { rule: 'none' as const, matchedIndex: null, tokensByChoice, note: '不一致（読みがCSVに無い/括弧に無い）' };
+    // ラベル本文（控えめな正規化）
+    const norm = (s: string) =>
+      s.normalize('NFKC').replace(/[\s、。・.,/\\|_*+~^$()[\]{}"'`!?@#:;<>-]/g, "");
+    const spokenLbl = norm(spokenRaw);
+    const ixLbl = choices.findIndex((c) => norm(c) === spokenLbl);
+    if (ixLbl >= 0) return { rule: 'label', matchedIndex: ixLbl, note: '表示ラベル一致' };
+
+    return { rule: 'none', matchedIndex: null, note: '不一致' };
+  };
+
+  // 音声結果
+  const onVoice = (spoken: { normalized: string; confidence: number; at: number; text?: string }) => {
+    if (!q || phaseRef.current !== "choices" || judgedThisCycleRef.current) return;
+    if (spoken.confidence < 0.3) return;
+
+    const res = tryMatch(heardFinal || heardInterim || "", q.choices, q.choiceReadings);
+    setMatchInfo({
+      spokenRaw: heardFinal || heardInterim || "",
+      spokenNorm: spoken.normalized,
+      rule: res.rule,
+      matchedIndex: res.matchedIndex,
+      note: res.note,
+    });
+
+    if (res.matchedIndex == null) {
+      setNoAnswerMsg("聞き取れませんでした。もう一度音声で回答してください。");
+      return;
+    }
+
+    setSelected(res.matchedIndex);
+    sfx.click();
+    const ok = res.matchedIndex === q.answer;
+    judgeNow(ok);
   };
 
   // メトロノーム
-  const { bpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, (beat /*1..4*/) => {
+  const { bpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, () => {
     if (!q) return;
     barBeatRef.current = ((barBeatRef.current % 8) + 1);
     const b = barBeatRef.current;
 
-    // b=1 は「新規出題」にのみ反応（既に choices/judge なら何もしない）
     if (b === 1 && (phaseRef.current === "ready" || phaseRef.current === "interlude")) {
       setPhase("prompt");
       judgedThisCycleRef.current = false;
@@ -259,79 +204,72 @@ function RhythmPlayInner() {
       sfx.click();
     }
 
-    if (b === 2 || b === 3) {
-      sfx.click();
-    }
+    if (b === 2 || b === 3) sfx.click();
 
-    // b=4 も「prompt から遷移する時だけ」開く
     if (b === 4 && phaseRef.current === "prompt") {
       setPhase("choices");
       sfx.click();
-      // 回答受付ウィンドウの中心時刻（b=4から半拍後）を記録
       const beatMs = 60000 / bpm;
       answerCenterAtRef.current = performance.now() + beatMs * 0.5;
       setCenterAtMs(Math.round(answerCenterAtRef.current));
-      setLastDeltaMs(null);
-      setLastGrade(null);
       setNoAnswerMsg("");
       setHeardInterim("");
       setHeardFinal("");
     }
 
-    // ⏸ 8拍目の自動×はやめる → 同一問題で再リスン
+    // 自動×はしない（同一問題継続）
     if (b === 8 && phaseRef.current === "choices" && !judgedThisCycleRef.current) {
       setNoAnswerMsg("聞き取れませんでした。もう一度音声で回答してください。");
       setHeardInterim("");
       setHeardFinal("");
-      // phase は "choices" のまま維持（同じ問題で継続）
     }
   });
 
+  // クリーンアップ
   useEffect(() => {
     return () => {
       stop();
       stopVoice();
-      // アンマウント時なので setMicOn は必須ではないが、開発時のホットリロード対策として明示
-      try { setMicOn(false); } catch { }
+      try { setMicOn(false); } catch {}
     };
   }, [stop]);
-  // デバッグ表示トグル: localStorage.kogoto:debugRhythm === "1" でON
+
+  // デバッグフラグ
   useEffect(() => {
     try {
-      const v = localStorage.getItem("kogoto:debugRhythm");
-      setDebugRhythm(v === "1");
-      const v2 = localStorage.getItem("kogoto:debugVoice");
-      setDebugVoice(v2 === "1");
-    } catch { }
+      setDebugRhythm(localStorage.getItem("kogoto:debugRhythm") === "1");
+      setDebugVoice(localStorage.getItem("kogoto:debugVoice") === "1");
+    } catch {}
   }, []);
 
+  // スタート
   const startPlay = async () => {
     if (!q) return;
 
-    // 1) クリック直後に getUserMedia を叩く（← これが超重要。ここで必ずポップアップが出る）
+    // 1) クリック直後に権限ダイアログ
     let granted = false;
     if (voiceSupported() && !micOn) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(t => t.stop()); // すぐ閉じる（権限トリガー目的）
+        stream.getTracks().forEach((t) => t.stop());
         granted = true;
         setMicPerm("granted");
         setVoiceErr("");
-      } catch (e) {
+      } catch {
         setMicPerm("denied");
         setVoiceErr("マイク権限がブロックされています。🔒→サイトの設定から『マイクを許可』してください。");
       }
     }
 
-    // 2) 認識を起動（権限OKのとき）
+    // 2) 認識開始
     if (granted) {
       const ok = startVoice({
-        lang: 'ja-JP',
+        lang: "ja-JP",
         onResult: (r) => {
           if (idxRef.current !== idx || phaseRef.current !== "choices") return;
           setInterimText("");
           setHeardInterim("");
-          setHeardFinal(r.text); // ← 正規化せず、人が読む確定文字
+          setHeardFinal(r.text);
           onVoice({ normalized: r.normalized, confidence: r.confidence, at: r.at });
         },
         onInterim: (t) => {
@@ -344,7 +282,7 @@ function RhythmPlayInner() {
       if (ok) setMicOn(true);
     }
 
-    // 3) メトロノーム開始など既存処理
+    // 3) 既存開始処理
     if (!latencyRef.current) latencyRef.current = getLatencyOffset() || (await calibrateOnce(120));
     await start();
     speak(q.word, { lang: "ja-JP", rate: 0.95 });
@@ -353,14 +291,13 @@ function RhythmPlayInner() {
     barBeatRef.current = 0;
   };
 
-
   const canAnswer = phase === "choices" && isRunning;
 
-    const goNext = () => {
+  // 次の問題へ（手動）
+  const goNext = () => {
     if (!q) return;
-    // 残あり → 次の設問へ
     if (idx + 1 < qs.length) {
-      setIdx(i => i + 1);
+      setIdx((i) => i + 1);
       setPhase("interlude");
       barBeatRef.current = 0;
       judgedThisCycleRef.current = false;
@@ -370,25 +307,28 @@ function RhythmPlayInner() {
       setNoAnswerMsg("");
       return;
     }
-    // 最終 → 保存して結果へ
+    // 終了 → 保存＆結果へ
     const total = qs.length;
-    const wrongIds = itemsRef.current.filter(it => !it.correct).map(it => it.vocabId);
+    const wrongIds = itemsRef.current.filter((it) => !it.correct).map((it) => it.vocabId);
     stop();
     saveSession({
       id: String(Date.now()),
       startedAt: startedAtRef.current,
       items: itemsRef.current,
-      correctRate: total ? (correct / total) : 0,
+      correctRate: total ? correct / total : 0,
       comboMax: maxStreak,
       earnedPoints: correct * 10 + maxStreak * 2,
       wrongIds,
     });
     itemsRef.current = [];
     startedAtRef.current = Date.now();
-    const p = new URLSearchParams({ total:String(total), correct:String(correct), streak:String(maxStreak) });
+    const p = new URLSearchParams({
+      total: String(total),
+      correct: String(correct),
+      streak: String(maxStreak),
+    });
     router.push(`/rhythm/result?${p.toString()}`);
   };
-
 
   return (
     <Container>
@@ -434,17 +374,15 @@ function RhythmPlayInner() {
               <div className="text-2xl font-extrabold mb-2">「{q.word}」の現代語は？</div>
               <div className="text-sm opacity-70 mb-4">
                 {phase === "prompt" && "提示中…（拍1）"}
-                {phase === "choices" && "選択肢をタップ！or 声で「1/2/3/4」や意味キーワード！"}
+                {phase === "choices" && "選択肢をタップ！or 声で『1/2/3/4』や かな読み！"}
                 {phase === "judge" && "判定中！"}
                 {phase === "ready" && (reviewMode ? "復習対象から出題します" : "スタートを押してね")}
               </div>
-              {/* 🎤マイクの聞き取り表示（常時・控えめ） */}
-              <div
-                className="text-xs mb-3 inline-flex items-center gap-2 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]"
-                aria-live="polite"
-              >
+
+              {/* 🎤聞き取りの可視化 */}
+              <div className="text-xs mb-3 inline-flex items-center gap-2 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]" aria-live="polite">
                 <span>🎤</span>
-                {micPerm === 'denied' ? (
+                {micPerm === "denied" ? (
                   <span className="opacity-70">マイクはブロック中（🔒→サイト設定で許可）</span>
                 ) : heardInterim ? (
                   <span>聞き取り中：<b>{heardInterim}</b></span>
@@ -454,6 +392,7 @@ function RhythmPlayInner() {
                   <span className="opacity-70">待機中… {noAnswerMsg && <em>{noAnswerMsg}</em>}</span>
                 )}
               </div>
+
               {debugVoice && (
                 <div className="text-xs mb-3 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]">
                   <div>interim: <span className="opacity-70">{interimText || "（なし）"}</span></div>
@@ -463,17 +402,7 @@ function RhythmPlayInner() {
                     <div className="mt-2">
                       <div>rule: <b>{matchInfo.rule}</b> / note: {matchInfo.note || "—"}</div>
                       <div>spoken(norm): <code>{matchInfo.spokenNorm}</code></div>
-                      <div className="mt-1">
-                        tokens:
-                        <ol className="list-decimal ml-5">
-                          {matchInfo.tokensByChoice.map((toks, i) => (
-                            <li key={i}>
-                              {toks.map((t, j) => <code key={j} className="mr-1">{t}</code>)}
-                              {matchInfo.matchedIndex === i && <span> ← match</span>}
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
+                      <div>matchedIndex: {matchInfo.matchedIndex ?? "—"}</div>
                     </div>
                   )}
                   <button
@@ -482,7 +411,7 @@ function RhythmPlayInner() {
                       const ok = await warmupMic();
                       const st = await getMicPermissionState();
                       setMicPerm(st);
-                      if (!ok && (st === 'denied' || st === 'prompt')) {
+                      if (!ok && (st === "denied" || st === "prompt")) {
                         setVoiceErr("マイク許可を確認してください（🔒→サイト設定→マイク）。");
                       } else {
                         setVoiceErr("");
@@ -491,20 +420,21 @@ function RhythmPlayInner() {
                   >
                     権限を再チェック
                   </button>
-                  {micPerm === 'denied' && (
+                  {micPerm === "denied" && (
                     <div className="mt-1 opacity-70">
-                      ヒント: <b>http://127.0.0.1:3000</b> で開くと新規オリジンとして再確認できます。
+                      ヒント: <b>http://127.0.0.1:3000</b> を別オリジンとして開くと再確認できます。
                     </div>
                   )}
                 </div>
               )}
+
               {debugRhythm && (
                 <div className="text-xs mb-3 px-2 py-1 inline-flex gap-3 rounded border border-[var(--border-strong)] bg-[var(--card)]">
                   <span>判定センター(ms): {centerAtMs ?? "—"}</span>
-                  <span>Δ(ms): {lastDeltaMs ?? "—"}</span>
-                  <span>GRADE: {lastGrade ?? "—"}</span>
                 </div>
               )}
+
+              {/* 選択肢：音声でヒットしたら selected を反映して光る */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {q.choices.map((txt, idxChoice) => (
                   <Button
@@ -534,7 +464,8 @@ function RhythmPlayInner() {
                   </Button>
                 ))}
               </div>
-              {/* 判定後は自動送りしない → 手動で次へ */}
+
+              {/* 判定後は手動で次へ */}
               {phase === "judge" && (
                 <div className="mt-4">
                   <Button variant="primary" size="lg" onClick={goNext}>
@@ -549,11 +480,10 @@ function RhythmPlayInner() {
     </Container>
   );
 }
+
 export default function Page() {
   return (
-    <Suspense fallback={
-      <div className="p-6 opacity-70">ロード中…</div>
-    }>
+    <Suspense fallback={<div className="p-6 opacity-70">ロード中…</div>}>
       <RhythmPlayInner />
     </Suspense>
   );

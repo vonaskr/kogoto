@@ -152,7 +152,7 @@ export function CrabSpotlight() {
     let alive = true;
     (async () => {
       const tag = await getWeatherTag();
-      if (!alive) return;
+      if (!alive) return;``
       setWeatherTag(tag); // "sunny" | "cloudy" | "rainy" | null
     })();
     return () => { alive = false; };
