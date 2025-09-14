@@ -45,6 +45,10 @@ function RhythmPlayInner() {
   const barBeatRef = useRef(0);
   const judgedThisCycleRef = useRef(false);
   const answerCenterAtRef = useRef<number>(0);
+  // choices に入ってからの聞き取り監視
+  const choicesEnteredAtRef = useRef<number>(0);
+  const heardSinceChoicesRef = useRef<boolean>(false);
+  const choicesRestartTimerRef = useRef<number | null>(null);
   const latencyRef = useRef<number>(0);
 
   const [micOn, setMicOn] = useState(false);
@@ -166,9 +170,9 @@ function RhythmPlayInner() {
   };
     // 音声結果（確定テキストで判定：stateのheardInterim/Finalに依存しない）
     const onVoice = (spoken: { text: string; normalized: string; confidence: number; at: number }) => {
-
     if (!q || phaseRef.current !== "choices" || judgedThisCycleRef.current) return;
     if (spoken.confidence < 0.3) return;
+    heardSinceChoicesRef.current = true;
     const raw = (spoken.text || "").trim();
     const res = tryMatch(raw, q.choices, q.choiceReadings);
     setMatchInfo({
@@ -219,26 +223,36 @@ function RhythmPlayInner() {
       setHeardFinal("");
     }
 
-    // 🎤 各問の回答開始時に“軽く再起動”して拾い直しを安定化
-      try { stopVoice(); } catch {}
-      const ok = startVoice({
-        lang: "ja-JP",
-        onResult: (r) => {
-          if (idxRef.current !== idx || phaseRef.current !== "choices") return;
-          setInterimText("");
-          setHeardInterim("");
-          setHeardFinal(r.text);
-          onVoice({ text: r.text, normalized: r.normalized, confidence: r.confidence, at: r.at });
-        },
-        onInterim: (t) => {
-          if (idxRef.current !== idx || phaseRef.current !== "choices") return;
-          setInterimText(t);
-          setHeardInterim(t);
-        },
-        onError: (msg) => setVoiceErr(msg),
-        // 無音で切れても自動復帰（既定true）
-      });
-      if (ok) setMicOn(true);
+          // 🎤 ウォッチドッグ：choices 直後に無音が続けば 1 回だけ再起動
+      heardSinceChoicesRef.current = false;
+      choicesEnteredAtRef.current = performance.now();
+      if (choicesRestartTimerRef.current) {
+        clearTimeout(choicesRestartTimerRef.current);
+        choicesRestartTimerRef.current = null;
+      }
+      choicesRestartTimerRef.current = window.setTimeout(() => {
+        if (phaseRef.current !== "choices") return;
+        if (heardSinceChoicesRef.current) return; // 既に拾えていれば何もしない
+        try { stopVoice(); } catch {}
+        const ok = startVoice({
+          lang: "ja-JP",
+          onResult: (r) => {
+            if (idxRef.current !== idx || phaseRef.current !== "choices") return;
+            setInterimText("");
+            setHeardInterim("");
+            setHeardFinal(r.text);
+            onVoice({ text: r.text, normalized: r.normalized, confidence: r.confidence, at: r.at });
+          },
+          onInterim: (t) => {
+            if (idxRef.current !== idx || phaseRef.current !== "choices") return;
+            setInterimText(t);
+            setHeardInterim(t);
+            heardSinceChoicesRef.current = true;
+          },
+          onError: (msg) => setVoiceErr(msg),
+        });
+        if (ok) setMicOn(true);
+      }, 1200); // 1.2s 無音なら再起動
     // 自動×はしない（同一問題継続）
     if (b === 8 && phaseRef.current === "choices" && !judgedThisCycleRef.current) {
       setNoAnswerMsg("聞き取れませんでした。もう一度音声で回答してください。");
@@ -253,6 +267,10 @@ function RhythmPlayInner() {
       stop();
       stopVoice();
       try { setMicOn(false); } catch {}
+        if (choicesRestartTimerRef.current) {
+        clearTimeout(choicesRestartTimerRef.current);
+        choicesRestartTimerRef.current = null;
+      }
     };
   }, [stop]);
 
