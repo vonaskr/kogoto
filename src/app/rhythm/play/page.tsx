@@ -49,6 +49,7 @@ function RhythmPlayInner() {
   const choicesEnteredAtRef = useRef<number>(0);
   const heardSinceChoicesRef = useRef<boolean>(false);
   const choicesRestartTimerRef = useRef<number | null>(null);
+  const delayedRestartTimerRef = useRef<number | null>(null);
   const latencyRef = useRef<number>(0);
 
   const [micOn, setMicOn] = useState(false);
@@ -253,6 +254,35 @@ function RhythmPlayInner() {
         });
         if (ok) setMicOn(true);
       }, 1200); // 1.2s 無音なら再起動
+      // 2問目以降は 150ms 遅延の“明示再起動”を追加（初問のTTS競合を避けつつ安定化）
+      if (idxRef.current > 0) {
+        if (delayedRestartTimerRef.current) {
+          clearTimeout(delayedRestartTimerRef.current);
+          delayedRestartTimerRef.current = null;
+        }
+        delayedRestartTimerRef.current = window.setTimeout(() => {
+          if (phaseRef.current !== "choices") return;
+          try { stopVoice(); } catch {}
+          const ok = startVoice({
+            lang: "ja-JP",
+            onResult: (r) => {
+              if (idxRef.current !== idx || phaseRef.current !== "choices") return;
+              setInterimText("");
+              setHeardInterim("");
+              setHeardFinal(r.text);
+              onVoice({ text: r.text, normalized: r.normalized, confidence: r.confidence, at: r.at });
+            },
+            onInterim: (t) => {
+              if (idxRef.current !== idx || phaseRef.current !== "choices") return;
+              setInterimText(t);
+              setHeardInterim(t);
+              heardSinceChoicesRef.current = true;
+            },
+            onError: (msg) => setVoiceErr(msg),
+          });
+          if (ok) setMicOn(true);
+        }, 150);
+      }
     // 自動×はしない（同一問題継続）
     if (b === 8 && phaseRef.current === "choices" && !judgedThisCycleRef.current) {
       setNoAnswerMsg("聞き取れませんでした。もう一度音声で回答してください。");
@@ -271,9 +301,26 @@ function RhythmPlayInner() {
         clearTimeout(choicesRestartTimerRef.current);
         choicesRestartTimerRef.current = null;
       }
+        if (delayedRestartTimerRef.current) {
+        clearTimeout(delayedRestartTimerRef.current);
+        delayedRestartTimerRef.current = null;
+      }
     };
   }, [stop]);
 
+  // phaseがchoicesを抜けたら、再起動系タイマーを必ず破棄（張り付き防止）
+  useEffect(() => {
+    if (phase !== "choices") {
+      if (choicesRestartTimerRef.current) {
+        clearTimeout(choicesRestartTimerRef.current);
+        choicesRestartTimerRef.current = null;
+      }
+      if (delayedRestartTimerRef.current) {
+        clearTimeout(delayedRestartTimerRef.current);
+        delayedRestartTimerRef.current = null;
+      }
+    }
+  }, [phase]);
   // デバッグフラグ
   useEffect(() => {
     try {
