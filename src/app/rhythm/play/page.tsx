@@ -51,6 +51,7 @@ function RhythmPlayInner() {
   const choicesRestartTimerRef = useRef<number | null>(null);
   const delayedRestartTimerRef = useRef<number | null>(null);
   const latencyRef = useRef<number>(0);
+  const micStreamRef = useRef<MediaStream | null>(null); 
 
   const [micOn, setMicOn] = useState(false);
   const [heardInterim, setHeardInterim] = useState<string>("");
@@ -254,7 +255,7 @@ function RhythmPlayInner() {
           },
           onError: (msg) => setVoiceErr(msg),
         });
-         // onStartで micOn を更新するためここでは触らない
+         // micOn は onStart/onEnd で更新
       }, 1200); // 1.2s 無音なら再起動（保険）
 
       // 2問目以降のみ：150ms遅延の明示再起動（初問TTS競合を避ける）
@@ -285,7 +286,7 @@ function RhythmPlayInner() {
             },
             onError: (msg) => setVoiceErr(msg),
           });
-          // onStartで更新
+          // micOn は onStart/onEnd で更新
         }, 150);
       }
       // 🎤（ここまで）b===4内
@@ -305,6 +306,11 @@ function RhythmPlayInner() {
       stop();
       stopVoice();
       try { setMicOn(false); } catch {}
+      // マイク常時保持を解放
+      try {
+        micStreamRef.current?.getTracks()?.forEach(t => { try { t.stop(); } catch {} });
+      } catch {}
+      micStreamRef.current = null;
         if (choicesRestartTimerRef.current) {
         clearTimeout(choicesRestartTimerRef.current);
         choicesRestartTimerRef.current = null;
@@ -346,8 +352,9 @@ function RhythmPlayInner() {
     let granted = false;
     if (voiceSupported() && !micOn) {
       try {
+        // ここで取得したストリームは保持して“マイク常時ON”
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((t) => t.stop());
+        micStreamRef.current = stream; 
         granted = true;
         try { setMicPerm(await getMicPermissionState()); } catch {}
         setVoiceErr("");
@@ -450,7 +457,7 @@ function RhythmPlayInner() {
 
                   <span>BPM: {bpm} ／ COMBO: {streak}</span>
                   <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--card)]">
-                    認識: {voiceSupported() ? (micOn ? "ON" : "OFF") : "未対応"}
+                     認識: {voiceSupported() ? (micOn ? "ON" : "OFF") : "未対応"}
                   </span>
                   <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--card)]">
                     権限: {micPerm}
