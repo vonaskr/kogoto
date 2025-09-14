@@ -385,9 +385,9 @@ function RhythmPlayInner() {
                 </div>
                 <div className="text-sm opacity-70 flex items-center gap-3">
                   <span>BPM: {bpm} ／ COMBO: {streak}</span>
-                  <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--card)]">
+                  {/* <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--card)]">
                     マイク: {voiceSupported() ? (micOn ? "ON" : "OFF") : "未対応"}
-                  </span>
+                  </span> */}
                 </div>
               </div>
               <Progress value={progress} className="mb-6" />
@@ -413,13 +413,15 @@ function RhythmPlayInner() {
 
               <div className="text-2xl font-extrabold mb-2">「{q.word}」の現代語は？</div>
               <div className="text-sm opacity-70 mb-4">
-                {phase === "prompt" && "提示中…（拍1）"}
-                {phase === "choices" && "選択肢をタップ！or 声で『1/2/3/4』や かな読み！"}
+                {phase === "prompt" && "提示中…）"}
+                {phase === "choices" && "選択肢をタップ！"}
                 {phase === "judge" && "判定中！"}
                 {phase === "ready" && (reviewMode ? "復習対象から出題します" : "スタートを押してね")}
               </div>
 
-              {/* 🎤聞き取りの可視化 */}
+
+              
+              {/* 🎤聞き取りの可視化
               <div className="text-xs mb-3 inline-flex items-center gap-2 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]" aria-live="polite">
                 <span>🎤</span>
                 {micPerm === "denied" ? (
@@ -431,9 +433,9 @@ function RhythmPlayInner() {
                 ) : (
                   <span className="opacity-70">待機中… {noAnswerMsg && <em>{noAnswerMsg}</em>}</span>
                 )}
-              </div>
-
+              </div> */}
               {/* 今回答バッジ：回答タイミングを明示 */}
+              {/*
               {phase === "choices" && (
                 <div className="mb-3">
                   <span className="text-xs px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]">
@@ -441,6 +443,8 @@ function RhythmPlayInner() {
                   </span>
                 </div>
               )}
+              */}
+
               {debugVoice && (
                 <div className="text-xs mb-3 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]">
                   <div>interim: <span className="opacity-70">{interimText || "（なし）"}</span></div>
