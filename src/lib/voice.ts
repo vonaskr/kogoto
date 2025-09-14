@@ -69,14 +69,22 @@ export function startVoice(opts: Opts = {}) {
   r.interimResults = true;
   r.maxAlternatives = 5;
 
+  // 途中経過(interim) も都度流し、確定時(final)は onResult を呼ぶ
   r.onresult = (e: SpeechRecognitionEvent) => {
-    const last = e.results?.[e.results.length - 1];
-    if (!last?.isFinal) return;
-    const alt = last[0];
+    // 直近の結果のみ扱う（古いバッファは無視）
+    const res = e.results?.[e.resultIndex] ?? e.results?.[e.results.length - 1];
+    if (!res) return;
+    const alt = res[0];
     const text = String(alt?.transcript ?? "").trim();
-    const normalized = normalizeJa(text);
-    const confidence = Number(alt?.confidence ?? 0);
-    opts.onResult?.({ text, normalized, confidence, at: performance.now() });
+    if (!text) return;
+    if (res.isFinal) {
+      const normalized = normalizeJa(text);
+      const confidence = Number(alt?.confidence ?? 0);
+      opts.onResult?.({ text, normalized, confidence, at: performance.now() });
+    } else {
+      // 途中経過
+      opts.onInterim?.(text);
+    }
   };
 
     r.onerror = (ev: any) => {
