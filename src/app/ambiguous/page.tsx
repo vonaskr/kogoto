@@ -320,8 +320,8 @@ export default function Ambiguous() {
             <div className="rounded-[var(--radius-lg)] border-4 border-[var(--border-strong)] p-4 mb-5">
               <div className="font-semibold mb-2">表情の作り方</div>
               <ul className="list-disc pl-5 text-sm opacity-80 space-y-1">
-                <li>ポジティブ：口角を上げて<span className="font-semibold">笑顔</span></li>
-                <li>ネガティブ：<span className="font-semibold">しかめ顔</span>、または<strong>口を開ける</strong>（判定補助）</li>
+                <li>ポジティブ：口を大きく開けて<span className="font-semibold">笑顔</span></li>
+                <li>ネガティブ：<span className="font-semibold">しかめ顔</span>、または<strong>口を固く閉じる</strong></li>
               </ul>
             </div>
             <div className="flex flex-wrap gap-3">
