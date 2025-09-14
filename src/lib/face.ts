@@ -121,10 +121,10 @@ export function startFaceStream(
       // 口の開閉の影響を強化
       // mouthH: 口の縦開き（大きいほどポジティブ、小さいほどネガティブ）
       let smile =
-        0.5 * norm(mouthW, 0.25, 0.6) +
-        0.3 * norm(mouthH, 0.02, 0.18) +
+        0.4 * norm(mouthW, 0.25, 0.6) +
+        0.2 * norm(mouthH, 0.02, 0.18) +
         0.2 * norm(-avgCornerLift, -0.15, 0.15) +
-        0.4 * norm(mouthH, 0.22, 0.45); // mouthH大きいほどsmile強化
+        0.7 * norm(mouthH, 0.22, 0.45); // mouthH大きいほどsmile強化（重み増加）
 
       let frown =
         0.6 * norm(0.12 - browGap, -0.05, 0.12) +
