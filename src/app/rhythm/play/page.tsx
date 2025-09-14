@@ -166,13 +166,15 @@ function RhythmPlayInner() {
   };
 
   // 音声結果
-  const onVoice = (spoken: { normalized: string; confidence: number; at: number; text?: string }) => {
+  const onVoice = (spoken: { text: string; normalized: string; confidence: number; at: number }) => {
     if (!q || phaseRef.current !== "choices" || judgedThisCycleRef.current) return;
     if (spoken.confidence < 0.3) return;
 
-    const res = tryMatch(heardFinal || heardInterim || "", q.choices, q.choiceReadings);
+    
+    const raw = (spoken.text || "").trim();
+    const res = tryMatch(raw, q.choices, q.choiceReadings);
     setMatchInfo({
-      spokenRaw: heardFinal || heardInterim || "",
+      spokenRaw: raw,
       spokenNorm: spoken.normalized,
       rule: res.rule,
       matchedIndex: res.matchedIndex,
@@ -204,7 +206,7 @@ function RhythmPlayInner() {
       sfx.click();
     }
 
-    if (b === 2 || b === 3) sfx.click();
+    if ((b === 2 || b === 3) && phaseRef.current !== "judge") sfx.click();
 
     if (b === 4 && phaseRef.current === "prompt") {
       setPhase("choices");
@@ -270,7 +272,7 @@ function RhythmPlayInner() {
           setInterimText("");
           setHeardInterim("");
           setHeardFinal(r.text);
-          onVoice({ normalized: r.normalized, confidence: r.confidence, at: r.at });
+          onVoice({ text: r.text, normalized: r.normalized, confidence: r.confidence, at: r.at });
         },
         onInterim: (t) => {
           if (idxRef.current !== idx || phaseRef.current !== "choices") return;
@@ -285,9 +287,9 @@ function RhythmPlayInner() {
     // 3) 既存開始処理
     if (!latencyRef.current) latencyRef.current = getLatencyOffset() || (await calibrateOnce(120));
     await start();
-    speak(q.word, { lang: "ja-JP", rate: 0.95 });
+    // 読み上げは「拍1」のタイミングで行うため、ここでは phase を変えない
     justStartedRef.current = true;
-    setPhase("prompt");
+    setPhase("ready");
     barBeatRef.current = 0;
   };
 

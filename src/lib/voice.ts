@@ -15,6 +15,7 @@ type Opts = {
 };
 
 let rec: SpeechRecognition | undefined;
+let stopping = false; // 明示停止フラグ
 
 function normalizeJa(s: string): string {
   return s
@@ -64,6 +65,7 @@ export function startVoice(opts: Opts = {}) {
   const SR = (window.SpeechRecognition ?? (window as any).webkitSpeechRecognition) as typeof SpeechRecognition;
   if (!SR) return false;
   const r = new SR();   // ← 型は推論で SpeechRecognition
+  stopping = false;
   r.lang = opts.lang ?? "ja-JP";
   r.continuous = true;
   r.interimResults = true;
@@ -79,13 +81,23 @@ export function startVoice(opts: Opts = {}) {
     opts.onResult?.({ text, normalized, confidence, at: performance.now() });
   };
 
+   const autoRestart = opts.autoRestart !== false; // 既定: true
     r.onerror = (ev: any) => {
     // 可能なら error/message/type から読み取り、人間可読の文字列にする
     const msg = (ev && (ev.error || ev.message || ev.type)) ? String(ev.error || ev.message || ev.type) : 'unknown';
     opts.onError?.(msg);
+    // 無音/no-speech 等で止まったら自動再開（明示停止でない場合）
+    if (!stopping && autoRestart) {
+      try { r.abort?.(); } catch {}
+      try { r.start(); } catch {}
+    }
   };
-  r.onend = () => console.log("SpeechRecognition ended");
-
+  r.onend = () => {
+    // ユーザーが stopVoice していなければ再開
+    if (!stopping && autoRestart) {
+      try { r.start(); } catch {}
+    }
+  };
   try { r.start(); } catch {}
 
   rec = r;
@@ -93,8 +105,10 @@ export function startVoice(opts: Opts = {}) {
 }
 
 export function stopVoice() {
+  stopping = true;
   if (rec) {
-  try { rec.stop(); } catch {}
+    try { rec.stop(); } catch {}
+    try { (rec as any).abort?.(); } catch {}
   }
   rec = undefined;
 }
