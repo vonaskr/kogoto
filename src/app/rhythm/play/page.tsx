@@ -168,8 +168,8 @@ function RhythmPlayInner() {
 
     return { rule: 'none', matchedIndex: null, note: '不一致' };
   };
-    // 音声結果（確定テキストで判定：stateのheardInterim/Finalに依存しない）
-    const onVoice = (spoken: { text: string; normalized: string; confidence: number; at: number }) => {
+  // 音声結果（確定テキストで判定：stateのheardInterim/Finalに依存しない）
+  const onVoice = (spoken: { text: string; normalized: string; confidence: number; at: number }) => {
     if (!q || phaseRef.current !== "choices" || judgedThisCycleRef.current) return;
     if (spoken.confidence < 0.3) return;
     heardSinceChoicesRef.current = true;
@@ -199,7 +199,7 @@ function RhythmPlayInner() {
     if (!q) return;
     barBeatRef.current = ((barBeatRef.current % 8) + 1);
     const b = barBeatRef.current;
-    
+
     if (b === 1 && (phaseRef.current === "ready" || phaseRef.current === "interlude")) {
       setPhase("prompt");
       judgedThisCycleRef.current = false;
@@ -223,36 +223,36 @@ function RhythmPlayInner() {
       setHeardFinal("");
     }
 
-          // 🎤 ウォッチドッグ：choices 直後に無音が続けば 1 回だけ再起動
-      heardSinceChoicesRef.current = false;
-      choicesEnteredAtRef.current = performance.now();
-      if (choicesRestartTimerRef.current) {
-        clearTimeout(choicesRestartTimerRef.current);
-        choicesRestartTimerRef.current = null;
-      }
-      choicesRestartTimerRef.current = window.setTimeout(() => {
-        if (phaseRef.current !== "choices") return;
-        if (heardSinceChoicesRef.current) return; // 既に拾えていれば何もしない
-        try { stopVoice(); } catch {}
-        const ok = startVoice({
-          lang: "ja-JP",
-          onResult: (r) => {
-            if (idxRef.current !== idx || phaseRef.current !== "choices") return;
-            setInterimText("");
-            setHeardInterim("");
-            setHeardFinal(r.text);
-            onVoice({ text: r.text, normalized: r.normalized, confidence: r.confidence, at: r.at });
-          },
-          onInterim: (t) => {
-            if (idxRef.current !== idx || phaseRef.current !== "choices") return;
-            setInterimText(t);
-            setHeardInterim(t);
-            heardSinceChoicesRef.current = true;
-          },
-          onError: (msg) => setVoiceErr(msg),
-        });
-        if (ok) setMicOn(true);
-      }, 1200); // 1.2s 無音なら再起動
+    // 🎤 ウォッチドッグ：choices 直後に無音が続けば 1 回だけ再起動
+    heardSinceChoicesRef.current = false;
+    choicesEnteredAtRef.current = performance.now();
+    if (choicesRestartTimerRef.current) {
+      clearTimeout(choicesRestartTimerRef.current);
+      choicesRestartTimerRef.current = null;
+    }
+    choicesRestartTimerRef.current = window.setTimeout(() => {
+      if (phaseRef.current !== "choices") return;
+      if (heardSinceChoicesRef.current) return; // 既に拾えていれば何もしない
+      try { stopVoice(); } catch { }
+      const ok = startVoice({
+        lang: "ja-JP",
+        onResult: (r) => {
+          if (idxRef.current !== idx || phaseRef.current !== "choices") return;
+          setInterimText("");
+          setHeardInterim("");
+          setHeardFinal(r.text);
+          onVoice({ text: r.text, normalized: r.normalized, confidence: r.confidence, at: r.at });
+        },
+        onInterim: (t) => {
+          if (idxRef.current !== idx || phaseRef.current !== "choices") return;
+          setInterimText(t);
+          setHeardInterim(t);
+          heardSinceChoicesRef.current = true;
+        },
+        onError: (msg) => setVoiceErr(msg),
+      });
+      if (ok) setMicOn(true);
+    }, 1200); // 1.2s 無音なら再起動
     // 自動×はしない（同一問題継続）
     if (b === 8 && phaseRef.current === "choices" && !judgedThisCycleRef.current) {
       setNoAnswerMsg("聞き取れませんでした。もう一度音声で回答してください。");
@@ -266,8 +266,8 @@ function RhythmPlayInner() {
     return () => {
       stop();
       stopVoice();
-      try { setMicOn(false); } catch {}
-        if (choicesRestartTimerRef.current) {
+      try { setMicOn(false); } catch { }
+      if (choicesRestartTimerRef.current) {
         clearTimeout(choicesRestartTimerRef.current);
         choicesRestartTimerRef.current = null;
       }
@@ -279,7 +279,7 @@ function RhythmPlayInner() {
     try {
       setDebugRhythm(localStorage.getItem("kogoto:debugRhythm") === "1");
       setDebugVoice(localStorage.getItem("kogoto:debugVoice") === "1");
-    } catch {}
+    } catch { }
   }, []);
 
   // スタート
@@ -413,14 +413,14 @@ function RhythmPlayInner() {
 
               <div className="text-2xl font-extrabold mb-2">「{q.word}」の現代語は？</div>
               <div className="text-sm opacity-70 mb-4">
-                {phase === "prompt" && "提示中…）"}
+                {phase === "prompt" && "提示中…"}
                 {phase === "choices" && "選択肢をタップ！"}
                 {phase === "judge" && "判定中！"}
                 {phase === "ready" && (reviewMode ? "復習対象から出題します" : "スタートを押してね")}
               </div>
 
 
-              
+
               {/* 🎤聞き取りの可視化
               <div className="text-xs mb-3 inline-flex items-center gap-2 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]" aria-live="polite">
                 <span>🎤</span>
