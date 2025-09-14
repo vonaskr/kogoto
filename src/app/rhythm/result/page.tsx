@@ -138,7 +138,8 @@ function RhythmResultInner() {
 
           {/* 操作ボタン（統一UI） */}
           <div className="flex gap-3 mb-6">
-            <Link href="/rhythm"><Button>もう一度</Button></Link>
+            <Link href="/rhythm"><Button>リズム学習</Button></Link>
+            <Link href="/ambiguous"><Button  variant="accent">曖昧クイズ</Button></Link>
             <Link href="/"><Button variant="surface">ホームへ</Button></Link>
           </div>
  
@@ -176,6 +177,7 @@ function RhythmResultInner() {
                     <div className="text-sm mt-1">
                       正解：<span className="font-medium">{it.correctText}</span>
                     </div>
+                    {/*}
                     <div className="text-sm">
                       あなたの回答：
                       <span className={it.correct ? "font-medium" : "font-medium line-through opacity-80"}>
@@ -185,6 +187,7 @@ function RhythmResultInner() {
                         <span className="ml-2">→ <span className="font-medium">{it.correctText}</span></span>
                       )}
                     </div>
+                    */}
                   </div>
                 ))}
               </div>

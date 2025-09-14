@@ -124,12 +124,14 @@ export function startFaceStream(
         0.4 * norm(mouthW, 0.25, 0.6) +
         0.2 * norm(mouthH, 0.02, 0.18) +
         0.2 * norm(-avgCornerLift, -0.15, 0.15) +
-        0.7 * norm(mouthH, 0.22, 0.45); // mouthH大きいほどsmile強化（重み増加）
+        0.7 * norm(mouthH, 0.22, 0.45) +
+        0.15; // 全体にバイアスを追加して笑顔判定を強化
 
       let frown =
         0.6 * norm(0.12 - browGap, -0.05, 0.12) +
         0.2 * (1 - norm(mouthH, 0.02, 0.18)) +
-        0.4 * (1 - norm(mouthH, 0.22, 0.45)); // mouthH小さいほどfrown強化
+        0.4 * (1 - norm(mouthH, 0.22, 0.45)) -
+        0.12; // 全体にバイアスを追加して悲しい顔判定を抑制
 
       smile = clamp01(smile);
       frown = clamp01(frown);
