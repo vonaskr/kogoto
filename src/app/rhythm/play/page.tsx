@@ -196,7 +196,8 @@ function RhythmPlayInner() {
   };
 
   // メトロノーム
-  const { bpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, () => {
+  const { bpm, isRunning, start, stop } = useMetronome(DEFAULT_BPM, async () => {
+
     if (!q) return;
     barBeatRef.current = ((barBeatRef.current % 8) + 1);
     const b = barBeatRef.current;
@@ -212,8 +213,7 @@ function RhythmPlayInner() {
     // 判定中はクリック音を鳴らさない
     if ((b === 2 || b === 3) && phaseRef.current !== "judge") sfx.click();
 
-
-    if (b === 4 && phaseRef.current === "prompt") {
+    if (b === 4 && phaseRef.current === "prompt") { 
       setPhase("choices");
       sfx.click();
       const beatMs = 60000 / bpm;
@@ -222,19 +222,23 @@ function RhythmPlayInner() {
       setNoAnswerMsg("");
       setHeardInterim("");
       setHeardFinal("");
-            // 🎤（ここから）「prompt→choices」に入った瞬間“だけ”再起動系を仕込む
+      // 権限状態を最新化（表示の食い違い防止）
+      try { setMicPerm(await getMicPermissionState()); } catch {}
+      // 🎤（ここから）「prompt→choices」に入った瞬間“だけ”再起動系を仕込む
       heardSinceChoicesRef.current = false;
       choicesEnteredAtRef.current = performance.now();
       if (choicesRestartTimerRef.current) {
         clearTimeout(choicesRestartTimerRef.current);
         choicesRestartTimerRef.current = null;
       }
-      choicesRestartTimerRef.current = window.setTimeout(() => {
+       choicesRestartTimerRef.current = window.setTimeout(() => {
         if (phaseRef.current !== "choices") return;
         if (heardSinceChoicesRef.current) return; // 既に拾えていれば何もしない
         try { stopVoice(); } catch {}
         const ok = startVoice({
           lang: "ja-JP",
+          onStart: () => setMicOn(true),
+          onEnd:   () => setMicOn(false),
           onResult: (r) => {
             if (idxRef.current !== idx || phaseRef.current !== "choices") return;
             setInterimText("");
@@ -250,7 +254,7 @@ function RhythmPlayInner() {
           },
           onError: (msg) => setVoiceErr(msg),
         });
-        if (ok) setMicOn(true);
+         // onStartで micOn を更新するためここでは触らない
       }, 1200); // 1.2s 無音なら再起動（保険）
 
       // 2問目以降のみ：150ms遅延の明示再起動（初問TTS競合を避ける）
@@ -264,6 +268,8 @@ function RhythmPlayInner() {
           try { stopVoice(); } catch {}
           const ok = startVoice({
             lang: "ja-JP",
+            onStart: () => setMicOn(true),
+            onEnd:   () => setMicOn(false),
             onResult: (r) => {
               if (idxRef.current !== idx || phaseRef.current !== "choices") return;
               setInterimText("");
@@ -279,7 +285,7 @@ function RhythmPlayInner() {
             },
             onError: (msg) => setVoiceErr(msg),
           });
-          if (ok) setMicOn(true);
+          // onStartで更新
         }, 150);
       }
       // 🎤（ここまで）b===4内
@@ -343,18 +349,22 @@ function RhythmPlayInner() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach((t) => t.stop());
         granted = true;
-        setMicPerm("granted");
+        try { setMicPerm(await getMicPermissionState()); } catch {}
         setVoiceErr("");
       } catch {
-        setMicPerm("denied");
-        setVoiceErr("マイク権限がブロックされています。🔒→サイトの設定から『マイクを許可』してください。");
-      }
+        // 失敗時も Permissions API の実値を反映（推測で 'denied' にしない）
+        try { setMicPerm(await getMicPermissionState()); } catch {}
+        setVoiceErr("マイクの利用を確認できません。🔒→サイトの設定で『マイクを許可』してください。");
+
+        }
     }
 
     // 2) 認識開始
     if (granted) {
       const ok = startVoice({
-        lang: "ja-JP",
+      lang: "ja-JP",
+        onStart: () => setMicOn(true),
+        onEnd:   () => setMicOn(false),
         onResult: (r) => {
           if (idxRef.current !== idx || phaseRef.current !== "choices") return;
           setInterimText("");
@@ -369,7 +379,7 @@ function RhythmPlayInner() {
         },
         onError: (msg) => setVoiceErr(msg),
       });
-      if (ok) setMicOn(true);
+       // micOn は onStart で更新
     }
 
     // 3) 既存開始処理
@@ -395,6 +405,9 @@ function RhythmPlayInner() {
       setHeardInterim("");
       setHeardFinal("");
       setNoAnswerMsg("");
+      // 次問の前に権限表示だけ更新（実際の取得は不要）
+      (async () => { try { setMicPerm(await getMicPermissionState()); } catch {} })();
+
       return;
     }
     // 終了 → 保存＆結果へ
@@ -429,17 +442,21 @@ function RhythmPlayInner() {
 
           {!loading && !err && q && (
             <>
-              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4">
                 <div className="font-semibold">
                   リズム学習：{idx + 1} / {qs.length}
                 </div>
                 <div className="text-sm opacity-70 flex items-center gap-3">
+
                   <span>BPM: {bpm} ／ COMBO: {streak}</span>
                   <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--card)]">
-                    マイク: {voiceSupported() ? (micOn ? "ON" : "OFF") : "未対応"}
+                    認識: {voiceSupported() ? (micOn ? "ON" : "OFF") : "未対応"}
+                  </span>
+                  <span className="px-2 py-0.5 rounded border border-[var(--border-strong)] bg-[var(--card)]">
+                    権限: {micPerm}
                   </span>
                 </div>
-              </div>
+                </div> 
               <Progress value={progress} className="mb-6" />
 
               <div className="flex gap-2 mb-4">

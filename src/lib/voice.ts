@@ -12,6 +12,9 @@ type Opts = {
   onInterim?: (text: string)=>void;      // 途中経過
   onError?: (err: string)=>void;         // エラー通知
   autoRestart?: boolean;                 // 切断時に再起動（既定: true）
+  onStart?: () => void;                  // 認識開始
+  onEnd?: () => void;                    // 認識終了（autoRestart前後で呼ばれる）
+
 };
 
 let rec: SpeechRecognition | undefined;
@@ -70,7 +73,8 @@ export function startVoice(opts: Opts = {}) {
   r.lang = opts.lang ?? "ja-JP";
   r.continuous = true;
   r.interimResults = true;
-  r.maxAlternatives = 5;
+  r.maxAlternatives = 5;  
+  r.onstart = () => { try { opts.onStart?.(); } catch {} };
 
   // 途中経過(interim) も都度流し、確定時(final)は onResult を呼ぶ
   r.onresult = (e: SpeechRecognitionEvent) => {
@@ -103,6 +107,7 @@ export function startVoice(opts: Opts = {}) {
     }
   };
     r.onend = () => {
+    try { opts.onEnd?.(); } catch {}
     // ユーザーが stopVoice していなければ再開
     if (!stopping && autoRestart) {
       try { r.start(); } catch {}
