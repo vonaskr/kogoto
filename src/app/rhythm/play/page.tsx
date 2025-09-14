@@ -129,6 +129,7 @@ function RhythmPlayInner()  {
       correct: ok,
     });
 
+    /*
     // 演出を見せてから次へ
     setTimeout(() => {
       if (idx + 1 < qs.length) {
@@ -162,7 +163,9 @@ function RhythmPlayInner()  {
         router.push(`/rhythm/result?${p.toString()}`);
       }
     }, 380);
+    */
   };
+  
 
   const onVoice = (spoken: { normalized: string; confidence: number; at: number }) => {
   if (!q || phase !== "choices" || judgedThisCycleRef.current) return;
@@ -350,6 +353,47 @@ function RhythmPlayInner()  {
 
   const canAnswer = phase === "choices" && isRunning;
 
+    // ▶ 次の問題へ（手動遷移）
+  const goNext = () => {
+    if (!q) return;
+    // まだ残りがあるなら次の設問へ
+    if (idx + 1 < qs.length) {
+      setIdx((i) => i + 1);
+      setPhase("interlude");
+      barBeatRef.current = 0;
+      setSelected(null);
+      // 表示している書き起こしもリセット
+      setHeardInterim("");
+      setHeardFinal("");
+      judgedThisCycleRef.current = false;
+      return;
+    }
+    // すべて終了 → セッション保存＆結果へ
+    const total = qs.length;
+    const nextStreakLocal = Math.max(maxStreak, streak);
+    const nextCorrectLocal = correct;
+    stop();
+    const wrongIds = itemsRef.current.filter((it) => !it.correct).map((it) => it.vocabId);
+    saveSession({
+      id: String(Date.now()),
+      startedAt: startedAtRef.current,
+      items: itemsRef.current,
+      correctRate: total ? nextCorrectLocal / total : 0,
+      comboMax: nextStreakLocal,
+      earnedPoints: nextCorrectLocal * 10 + nextStreakLocal * 2,
+      wrongIds,
+    });
+    itemsRef.current = [];
+    startedAtRef.current = Date.now();
+    const p = new URLSearchParams({
+      total: String(total),
+      correct: String(nextCorrectLocal),
+      streak: String(nextStreakLocal),
+    });
+    router.push(`/rhythm/result?${p.toString()}`);
+  };
+
+  
   return (
     <Container>
       <Card>
@@ -494,6 +538,14 @@ function RhythmPlayInner()  {
                   </Button>
                 ))}
               </div>
+              {/* 判定後は自動送りしない → 手動で次へ */}
+              {phase === "judge" && (
+                <div className="mt-4">
+                  <Button variant="primary" size="lg" onClick={goNext}>
+                    次の問題へ
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </CardContent>
