@@ -19,7 +19,7 @@ export async function initFace() {
   const mp = await import("@mediapipe/tasks-vision");
   vision = mp;
   const wasmPath = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
- // Mediapipe が INFO を stderr に流すため Next の赤Nが点く → 既知文言のみ握りつぶし
+  // Mediapipe が INFO を stderr に流すため Next の赤Nが点く → 既知文言のみ握りつぶし
   const origErr = console.error;
   console.error = (msg?: any, ...rest: any[]) => {
     const text = String(msg ?? "");
@@ -41,7 +41,7 @@ export async function initFace() {
     numFaces: 1,
     outputFacialTransformationMatrixes: true,
   });
-  console.error = origErr; 
+  console.error = origErr;
 }
 
 export function startFaceStream(
@@ -118,19 +118,18 @@ export function startFaceStream(
       const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
       // 笑顔: 横開き↑ + 縦開き少し↑ + 口角上がり
+      // 口の開閉の影響を強化
+      // mouthH: 口の縦開き（大きいほどポジティブ、小さいほどネガティブ）
       let smile =
-        0.6 * norm(mouthW, 0.25, 0.6) +
-        0.2 * norm(mouthH, 0.02, 0.18) +
-        0.2 * norm(-avgCornerLift, -0.15, 0.15); // 口角が上がる(負)→スコア↑
+        0.5 * norm(mouthW, 0.25, 0.6) +
+        0.3 * norm(mouthH, 0.02, 0.18) +
+        0.2 * norm(-avgCornerLift, -0.15, 0.15) +
+        0.4 * norm(mouthH, 0.22, 0.45); // mouthH大きいほどsmile強化
 
-      // しかめ面: 眉間狭い + 口縦開きは小さめ
       let frown =
-        0.7 * norm(0.12 - browGap, -0.05, 0.12) + // 小さいほど↑
-        0.3 * (1 - norm(mouthH, 0.02, 0.18));
-
-      // 口を大きく開けている場合はネガ寄りに補助（悲しい顔作りづらさの救済）
-      const mouthOpenBoost = norm(mouthH, 0.22, 0.45); // 0.22〜で徐々に効く
-      frown = Math.max(frown, mouthOpenBoost);
+        0.6 * norm(0.12 - browGap, -0.05, 0.12) +
+        0.2 * (1 - norm(mouthH, 0.02, 0.18)) +
+        0.4 * (1 - norm(mouthH, 0.22, 0.45)); // mouthH小さいほどfrown強化
 
       smile = clamp01(smile);
       frown = clamp01(frown);
