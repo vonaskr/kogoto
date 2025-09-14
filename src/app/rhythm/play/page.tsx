@@ -219,6 +219,26 @@ function RhythmPlayInner() {
       setHeardFinal("");
     }
 
+    // 🎤 各問の回答開始時に“軽く再起動”して拾い直しを安定化
+      try { stopVoice(); } catch {}
+      const ok = startVoice({
+        lang: "ja-JP",
+        onResult: (r) => {
+          if (idxRef.current !== idx || phaseRef.current !== "choices") return;
+          setInterimText("");
+          setHeardInterim("");
+          setHeardFinal(r.text);
+          onVoice({ text: r.text, normalized: r.normalized, confidence: r.confidence, at: r.at });
+        },
+        onInterim: (t) => {
+          if (idxRef.current !== idx || phaseRef.current !== "choices") return;
+          setInterimText(t);
+          setHeardInterim(t);
+        },
+        onError: (msg) => setVoiceErr(msg),
+        // 無音で切れても自動復帰（既定true）
+      });
+      if (ok) setMicOn(true);
     // 自動×はしない（同一問題継続）
     if (b === 8 && phaseRef.current === "choices" && !judgedThisCycleRef.current) {
       setNoAnswerMsg("聞き取れませんでした。もう一度音声で回答してください。");
@@ -395,6 +415,14 @@ function RhythmPlayInner() {
                 )}
               </div>
 
+              {/* 今回答バッジ：回答タイミングを明示 */}
+              {phase === "choices" && (
+                <div className="mb-3">
+                  <span className="text-xs px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]">
+                    ✅ 今回答受付中（声またはタップで回答）
+                  </span>
+                </div>
+              )}
               {debugVoice && (
                 <div className="text-xs mb-3 px-2 py-1 rounded border border-[var(--border-strong)] bg-[var(--card)]">
                   <div>interim: <span className="opacity-70">{interimText || "（なし）"}</span></div>
